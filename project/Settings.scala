@@ -33,6 +33,7 @@ object Settings {
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom
     , scalaVersion := "2.11.5"
     , crossScalaVersions  := Seq("2.11.5", "2.10.4")
+    , ReleaseKeys.crossBuild := true
     , autoScalaLibrary := false
     , scalacOptions ++= scalacFlags 
     , javacOptions ++= Seq("-encoding", "UTF-8")
