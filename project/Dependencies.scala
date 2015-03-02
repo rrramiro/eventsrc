@@ -51,16 +51,13 @@ object Dependencies {
       "io.atlassian.health" %% "healthcheck-core"  % "1.0.0"
     )
 
-  // lazy val aws =
-  //   Seq(
-  //     "io.atlassian.aws-scala" %% "aws-scala-core"     % AWS_SCALA
-  //   , "io.atlassian.aws-scala" %% "aws-scala-s3"       % AWS_SCALA
-  //   , "io.atlassian.aws-scala" %% "aws-scala-sqs"      % AWS_SCALA
-  //   , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % AWS_SCALA
-  //   , "io.atlassian.aws-scala" %% "aws-scala-core"     % AWS_SCALA  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
-  //   , "io.atlassian.aws-scala" %% "aws-scala-s3"       % AWS_SCALA  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
-  //   , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % AWS_SCALA  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
-  //   )
+  lazy val dynamodb =
+    Seq(
+      "io.atlassian.aws-scala" %% "aws-scala-core"     % AWS_SCALA
+    , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % AWS_SCALA
+    , "io.atlassian.aws-scala" %% "aws-scala-core"     % AWS_SCALA  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
+    , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % AWS_SCALA  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
+    )
 
   // lazy val schmetricsCore =
   //   Seq(

@@ -3,19 +3,19 @@ import sbt.Keys._
 import Settings._
 
 trait Modules {
-  val project: String => Project = n => 
+  def project(n: String, deps: Seq[ModuleID] = Vector()): Project = 
     Project(
       id = n
     , base = file(n)
     , settings = standardSettings
     ).settings(
       name := s"eventsrc-$n"
-    , libraryDependencies ++= Dependencies.common
+    , libraryDependencies ++= (Dependencies.common ++ deps)
     )
 
   lazy val core = project("core")
 
-  lazy val dynamo = project("dynamodb").dependsOn(core)
+  lazy val dynamo = project("dynamodb", Dependencies.dynamodb).dependsOn(core)
 
   // aggregate
   lazy val all = 

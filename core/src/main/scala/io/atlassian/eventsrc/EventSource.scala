@@ -79,21 +79,14 @@ trait EventSource[K, V] {
       EventId(key, Sequence.first)
 
     def next(id: EventId): EventId =
-      EventId(id.key, Sequence.next(id.sequence))
+      id.copy(sequence = Sequence.next(id.sequence))
   }
 
   case class Event(id: EventId, time: DateTime, operation: Transform[V])
 
   object Event {
-    def next(key: K, snapshot: Snapshot, op: Transform[V]): Event = {
-      import Snapshot._
-      val newId = snapshot match {
-        case Value(_, at, _) => EventId.next(at)
-        case NoSnapshot()    => EventId.first(key)
-        case Deleted(at, _)  => EventId.next(at)
-      }
-      Event(newId, DateTime.now, op)
-    }
+    def next(key: K, snapshot: Snapshot, op: Transform[V]): Event =
+      Event(snapshot.id.map { EventId.next }.getOrElse { EventId.first(key) }, DateTime.now, op)
   }
 
   /**
@@ -107,6 +100,8 @@ trait EventSource[K, V] {
   sealed trait Snapshot {
     import Snapshot._
     def value: Option[V]
+    def id: Option[EventId] = 
+      this.fold(None, { case (_, at, _) => Some(at) }, { case (at, _)  => Some(at) })
 
     def fold[X](none: => X, value: (V, EventId, DateTime) => X, deleted: (EventId, DateTime) => X): X =
       this match {
