@@ -10,7 +10,7 @@ import scalaz.stream.Process
 /**
  * Simple event store that keeps lists of commits for a key in a mutable map
  */
-class MemoryEventSource extends EventSource[Int, String] {
+class MemoryEventSource extends LongSequencedEventSource[Int, String] {
   val map = collection.concurrent.TrieMap[Int, List[Event]]()
 
   object api extends API[Task] {
