@@ -64,22 +64,25 @@ object EventSource {
  * The main trait that implementations of an event source need to extend.
  * @tparam K The key against which values are stored.
  * @tparam V Values to be store
+ * @tparam S Type of the sequence. Needs to have a Sequence type class implementation.          
  */
-trait EventSource[K, V] {
+trait EventSource[K, V, S] {
+
+  def S: Sequence[S]
 
   /**
    * A event is identified by the key and an incrementing sequence number
    * @param key The key
    * @param sequence the sequence number
    */
-  case class EventId(key: K, sequence: Sequence)
+  case class EventId(key: K, sequence: S)
 
   object EventId {
     def first(key: K): EventId =
-      EventId(key, Sequence.first)
+      EventId(key, S.first)
 
     def next(id: EventId): EventId =
-      id.copy(sequence = Sequence.next(id.sequence))
+      id.copy(sequence = S.next(id.sequence))
   }
 
   case class Event(id: EventId, time: DateTime, operation: Transform[V])
@@ -210,8 +213,8 @@ trait EventSource[K, V] {
      * @param seq the sequence number of the event at which we want the see the view of the data.
      * @return view of the data at event with sequence 'seq'
      */
-    final def getAt(key: K, seq: Sequence): F[Option[V]] =
-      getWhile(key) { _.id.sequence.seq <= seq.seq }
+    final def getAt(key: K, seq: S): F[Option[V]] =
+      getWhile(key) { e => S.order.lessThanOrEqual(e.id.sequence, seq) }
 
     final def getHistory(key: K): F[Process[F, Snapshot]] =
       M.point(store.get(key).scan[Snapshot](Snapshot.zero) {

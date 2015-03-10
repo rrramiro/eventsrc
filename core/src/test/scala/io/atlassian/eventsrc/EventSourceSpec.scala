@@ -125,7 +125,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       _ <- save(1, "fred".insertOp)
       _ <- save(1, "barney".insertOp)
       _ <- save(1, "wilma".insertOp)
-      get <- getAt(1, Sequence(1))
+      get <- getAt(1, LongSequence(1))
     } yield get
 
     lotsOfStuff.run === "barney".some
@@ -140,7 +140,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       val1 <- get(1)
       _ <- save(1, deleteOp)
       val2 <- get(1)
-      val3 <- getAt(1, Sequence(0))
+      val3 <- getAt(1, LongSequence(0))
     } yield (val1, val2, val3)
 
     val expected = ("fred".some, None, "fred".some)

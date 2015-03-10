@@ -4,12 +4,9 @@ package dynamo
 import com.amazonaws.services.dynamodbv2.{ AmazonDynamoDBClient => DynamoClient }
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException
 
-import io.atlassian.aws.Attempt
-import io.atlassian.aws.dynamodb.{ AttributeDefinition, DynamoDB }
-import io.atlassian.aws.dynamodb.{ Column, Encoder, Marshaller, Page, Query, StoreValue, TableDefinition, Unmarshaller }
+import io.atlassian.aws.dynamodb.DynamoDB
+import io.atlassian.aws.dynamodb.{ Column, Marshaller, Page, Query, StoreValue, TableDefinition, Unmarshaller }
 import io.atlassian.aws.OverwriteMode
-import io.atlassian.eventsrc.{ EventSource, EventSourceError, Sequence, Transform }
-import io.atlassian.eventsrc.Transform.{ Delete, Insert }
 import kadai.Invalid
 import scalaz.{ Catchable, Monad, Show, \/, \/-, -\/, ~> }
 import scalaz.concurrent.Task
@@ -23,7 +20,7 @@ object DynamoEventSource {
   }
 }
 
-trait DynamoEventSource[K, V] extends EventSource[K, V] {
+trait DynamoEventSource[K, V] extends LongSequencedEventSource[K, V] {
   import DynamoEventSource._
 
   abstract class DAO[F[_]](awsClient: DynamoClient, tableName: String)(
