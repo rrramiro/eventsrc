@@ -6,6 +6,7 @@ import scalaz.{ -\/, Catchable, Monad, NonEmptyList, \/, \/- }
 import scalaz.stream.{ Process, process1 }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
+import scalaz.syntax.std.option._
 
 /**
  * An event source is an append-only store of data. Data is represented as a series of events that when replayed in
@@ -163,7 +164,7 @@ trait EventSource[K, V, S] {
      * @param key The key
      * @return Stream of events.
      */
-    def get(key: K): Process[F, Event]
+    def get(key: K, sequence: S): Process[F, Event]
 
     /**
      * Save the given event.
@@ -178,10 +179,19 @@ trait EventSource[K, V, S] {
      * @param events The stream of events.
      * @return Container F that when executed provides the snapshot.
      */
-    def applyEvents(events: Process[F, Event]): F[Snapshot] =
+    def applyEvents(events: Process[F, Event], snapshot: Snapshot): F[Snapshot] =
       events.pipe {
-        process1.fold(Snapshot.zero)(Snapshot.update)
-      }.runLastOr(Snapshot.zero)
+        process1.fold(snapshot)(Snapshot.update)
+      }.runLastOr(snapshot)
+  }
+
+  trait SnapshotStorage[F[_]] {
+    protected implicit def M: Monad[F]
+    protected implicit def C: Catchable[F]
+
+    def get(key: K, beforeSequence: Option[S]): F[Option[Snapshot]]
+
+    def put(key: K, s: Snapshot): F[EventSourceError \/ Snapshot]
   }
 
   /**
@@ -201,11 +211,13 @@ trait EventSource[K, V, S] {
      */
     def store: Storage[F]
 
+    def snapshotStore: SnapshotStorage[F]
+
     /**
      * Return the current view of the data for key 'key'
      */
     final def get(key: K): F[Option[V]] =
-      getWhile(key) { _ => true }
+      latestSnapshot(key) map { _.value }
 
     /**
      * Return the view of the data for the key 'key' at the specified sequence number.
@@ -214,10 +226,10 @@ trait EventSource[K, V, S] {
      * @return view of the data at event with sequence 'seq'
      */
     final def getAt(key: K, seq: S): F[Option[V]] =
-      getWhile(key) { e => S.order.lessThanOrEqual(e.id.sequence, seq) }
+      getWhile(key, seq.some) { e => S.order.lessThanOrEqual(e.id.sequence, seq) }
 
     final def getHistory(key: K): F[Process[F, Snapshot]] =
-      M.point(store.get(key).scan[Snapshot](Snapshot.zero) {
+      M.point(store.get(key, S.first).scan[Snapshot](Snapshot.zero) {
         case (snapshot, event) => Snapshot.update(snapshot, event)
       }.drop(1)) // skip the initial value of Snapshot.zero
 
@@ -229,7 +241,7 @@ trait EventSource[K, V, S] {
      */
     final def getAt(key: K, time: DateTime): F[Option[V]] = {
       import com.github.nscala_time.time.Implicits._
-      getWhile(key) { _.time <= time }
+      getWhile(key, None) { _.time <= time }
     }
 
     /**
@@ -245,7 +257,7 @@ trait EventSource[K, V, S] {
      */
     final def save(key: K, operation: Operation[V]): F[EventSource.Result[V]] =
       for {
-        old <- store.applyEvents(store.get(key))
+        old <- latestSnapshot(key)
         op = operation.run(old.value)
         result <- op.fold(EventSourceError.noop.left[Event].point[F], EventSourceError.reject(_).left[Event].point[F], v => store.put(Event.next(key, old, v)))
         transform <- result match {
@@ -272,7 +284,15 @@ trait EventSource[K, V, S] {
      * @param pred Predicate for filtering events.
      * @return View of the data obtained from applying all events in the stream up until the given condition is not met.
      */
-    private[eventsrc] def getWhile(key: K)(pred: Event => Boolean): F[Option[V]] =
-      M(store.applyEvents(store.get(key).takeWhile(pred))) { _.value }
+    private[eventsrc] def getWhile(key: K, at: Option[S])(pred: Event => Boolean): F[Option[V]] =
+      getSnapshot(key, at)(pred).map { _.value }
+
+    private[eventsrc] def getSnapshot(key: K, at: Option[S])(pred: Event => Boolean): F[Snapshot] =
+      snapshotStore.get(key, at).map { _.getOrElse(Snapshot.zero) }.flatMap { s =>
+        store.applyEvents(store.get(key, s.id.map { _.sequence }.getOrElse(S.first)).takeWhile(pred), s)
+      }
+
+    private[eventsrc] def latestSnapshot(key: K): F[Snapshot] =
+      getSnapshot(key, None) { _ => true }
   }
 }

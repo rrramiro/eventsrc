@@ -23,6 +23,17 @@ object DynamoEventSource {
 trait DynamoEventSource[K, V] extends LongSequencedEventSource[K, V] {
   import DynamoEventSource._
 
+  abstract class NoSnapshotStorage[F[_]](awsClient: DynamoClient, tableName: String)(
+    implicit M: Monad[F],
+    C: Catchable[F]) extends SnapshotStorage[F] {
+
+    override def get(key: K, beforeSequence: Option[LongSequence]): F[Option[Snapshot]] =
+      M.point(None)
+
+    override def put(key: K, snapshot: Snapshot): F[EventSourceError \/ Snapshot] =
+      M.point(snapshot.right)
+  }
+
   abstract class DAO[F[_]](awsClient: DynamoClient, tableName: String)(
       implicit M: Monad[F],
       C: Catchable[F],
