@@ -22,27 +22,17 @@ object DynamoEventSource {
 
 trait DynamoEventSource[K, V] extends LongSequencedEventSource[K, V] {
   import DynamoEventSource._
-
-  abstract class NoSnapshotStorage[F[_]](awsClient: DynamoClient, tableName: String)(
-    implicit M: Monad[F],
-    C: Catchable[F]) extends SnapshotStorage[F] {
-
-    override def get(key: K, beforeSequence: Option[LongSequence]): F[Option[Snapshot]] =
-      M.point(None)
-
-    override def put(key: K, snapshot: Snapshot): F[EventSourceError \/ Snapshot] =
-      M.point(snapshot.right)
-  }
+  import EventSource.Error
 
   abstract class DAO[F[_]](awsClient: DynamoClient, tableName: String)(
-      implicit M: Monad[F],
-      C: Catchable[F],
-      ToF: Task ~> F,
-      keyCol: Column[K],
-      marshallKey: Marshaller[K],
-      marshallEventId: Marshaller[EventId],
-      marshallEvent: Marshaller[Event],
-      unmarshall: Unmarshaller[Event]) extends Storage[F] {
+    implicit M: Monad[F],
+    C: Catchable[F],
+    ToF: Task ~> F,
+    keyCol: Column[K],
+    marshallKey: Marshaller[K],
+    marshallEventId: Marshaller[EventId],
+    marshallEvent: Marshaller[Event],
+    unmarshall: Unmarshaller[Event]) extends Storage[F] {
 
     import scalaz.syntax.monad._
 
@@ -55,7 +45,7 @@ trait DynamoEventSource[K, V] extends LongSequencedEventSource[K, V] {
      * @param key The key
      * @return Stream of events.
      */
-    override def get(key: K): Process[F, Event] = {
+    override def get(key: K, fromSeq: Option[Long]): Process[F, Event] = {
 
       import Process._
 
@@ -78,16 +68,16 @@ trait DynamoEventSource[K, V] extends LongSequencedEventSource[K, V] {
      * and also catch ConditionalCheckFailedException, which represents a duplicate event.
      *
      * @param event The event to save.
-     * @return Either an EventSourceError or the event that was saved. Other non-specific errors should be available
+     * @return Either an EventSource.Error or the event that was saved. Other non-specific errors should be available
      *         through the container F.
      */
-    override def put(event: Event): F[EventSourceError \/ Event] =
+    override def put(event: Event): F[Error \/ Event] =
       for {
         putResult <- DynamoDB.put[EventId, Event](event.id, event, OverwriteMode.NoOverwrite).map { _ => event }.run(awsClient).run.point[F]
 
         r <- putResult match {
           case \/-(c) => c.right.point[F]
-          case -\/(Invalid.Err(d: ConditionalCheckFailedException)) => EventSourceError.DuplicateEvent.left[Event].point[F]
+          case -\/(Invalid.Err(d: ConditionalCheckFailedException)) => Error.DuplicateEvent.left[Event].point[F]
           case -\/(i) => C.fail(toThrowable(i))
         }
       } yield r

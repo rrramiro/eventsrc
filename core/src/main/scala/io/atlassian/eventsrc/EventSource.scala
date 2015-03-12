@@ -155,10 +155,7 @@ trait EventSource[K, V, S] {
    *
    * @tparam F Container around operations on an underlying data store. F must be a Monad and a Catchable (e.g. Task).
    */
-  trait Storage[F[_]] {
-    protected implicit def M: Monad[F]
-    protected implicit def C: Catchable[F]
-
+  protected[EventSource] trait Storage[F[_]] {
     /**
      * Retrieve a stream of events from the underlying data store. This stream should take care of pagination and
      * cleanup of any underlying resources (e.g. closing connections if required).
@@ -175,25 +172,6 @@ trait EventSource[K, V, S] {
      *         through the container F.
      */
     protected[EventSource] def put(event: Event): F[Error \/ Event]
-
-    /**
-     * Essentially a runFoldMap on the given process to produce a snapshot after collapsing a stream of events.
-     * @param events The stream of events.
-     * @return Container F that when executed provides the snapshot.
-     */
-    def applyEvents(events: Process[F, Event], snapshot: Snapshot): F[Snapshot] =
-      events.pipe {
-        process1.fold(snapshot)(Snapshot.update)
-      }.runLastOr(snapshot)
-  }
-
-  private[eventsrc] trait SnapshotStorage[F[_]] {
-    protected implicit def M: Monad[F]
-    protected implicit def C: Catchable[F]
-
-    def get(key: K, beforeSequence: Option[S]): F[Option[Snapshot]]
-
-    def put(key: K, s: Snapshot): F[Error \/ Snapshot]
   }
 
   /**
@@ -207,19 +185,18 @@ trait EventSource[K, V, S] {
    */
   trait API[F[_]] {
     protected implicit def M: Monad[F]
+    protected implicit def C: Catchable[F]
 
     /**
      * @return Underlying store of events
      */
     def store: Storage[F]
 
-    def snapshotStore: SnapshotStorage[F]
-
     /**
      * Return the current view of the data for key 'key'
      */
     final def get(key: K): F[Option[V]] =
-      latestSnapshot(key) map { _.value }
+      getWhile(key) { _ => true }
 
     /**
      * Return the view of the data for the key 'key' at the specified sequence number.
@@ -228,10 +205,10 @@ trait EventSource[K, V, S] {
      * @return view of the data at event with sequence 'seq'
      */
     final def getAt(key: K, seq: S): F[Option[V]] =
-      getWhile(key, seq.some) { e => S.order.lessThanOrEqual(e.id.sequence, seq) }
+      getWhile(key) { e => S.order.lessThanOrEqual(e.id.sequence, seq) }
 
     final def getHistory(key: K): F[Process[F, Snapshot]] =
-      M.point(store.get(key, S.first).scan[Snapshot](Snapshot.zero) {
+      M.point(store.get(key).scan[Snapshot](Snapshot.zero) {
         case (snapshot, event) => Snapshot.update(snapshot, event)
       }.drop(1)) // skip the initial value of Snapshot.zero
 
@@ -243,7 +220,7 @@ trait EventSource[K, V, S] {
      */
     final def getAt(key: K, time: DateTime): F[Option[V]] = {
       import com.github.nscala_time.time.Implicits._
-      getWhile(key, None) { _.time <= time }
+      getWhile(key) { _.time <= time }
     }
 
     /**
@@ -259,7 +236,7 @@ trait EventSource[K, V, S] {
      */
     final def save(key: K, operation: Operation[V]): F[EventSource.Result[V]] =
       for {
-        old <- latestSnapshot(key)
+        old <- extractSnapshot(store.get(key))
         op = operation.run(old.value)
         result <- op.fold(Error.noop.left[Event].point[F], Error.reject(_).left[Event].point[F], v => store.put(Event.next(key, old, v)))
         transform <- result match {
@@ -286,15 +263,17 @@ trait EventSource[K, V, S] {
      * @param pred Predicate for filtering events.
      * @return View of the data obtained from applying all events in the stream up until the given condition is not met.
      */
-    private[eventsrc] def getWhile(key: K, at: Option[S])(pred: Event => Boolean): F[Option[V]] =
-      getSnapshot(key, at)(pred).map { _.value }
+    private[eventsrc] def getWhile(key: K)(pred: Event => Boolean): F[Option[V]] =
+      M(extractSnapshot(store.get(key).takeWhile(pred))) { _.value }
 
-    private[eventsrc] def getSnapshot(key: K, at: Option[S])(pred: Event => Boolean): F[Snapshot] =
-      snapshotStore.get(key, at).map { _.getOrElse(Snapshot.zero) }.flatMap { s =>
-        store.applyEvents(store.get(key, s.id.map { _.sequence }.getOrElse(S.first)).takeWhile(pred), s)
-      }
-
-    private[eventsrc] def latestSnapshot(key: K): F[Snapshot] =
-      getSnapshot(key, None) { _ => true }
+    /**
+     * Essentially a runFoldMap on the given process to produce a snapshot after collapsing a stream of events.
+     * @param events The stream of events.
+     * @return Container F that when executed provides the snapshot.
+     */
+    private def extractSnapshot(events: Process[F, Event]): F[Snapshot] =
+      events.pipe {
+        process1.fold(Snapshot.zero)(Snapshot.update)
+      }.runLastOr(Snapshot.zero)
   }
 }

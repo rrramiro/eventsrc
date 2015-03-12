@@ -20,10 +20,7 @@ class MemoryEventSource extends LongSequencedEventSource[Int, String] {
     val C = Catchable[Task]
 
     object store extends Storage[Task] {
-      val M = api.M
-      val C = api.C
-
-      override def get(key: Int, seq: Long): Process[Task, Event] =
+      override def get(key: Int, seq: Option[Long]): Process[Task, Event] =
         map.get(key) match {
           case None     => Process.halt
           case Some(cs) => Process.emitAll(cs.reverse)
@@ -35,17 +32,6 @@ class MemoryEventSource extends LongSequencedEventSource[Int, String] {
           map += (ev.id.key -> (ev :: map.getOrElse(ev.id.key, Nil)))
           ev.right
         }
-    }
-
-    override object snapshotStore extends SnapshotStorage[Task] {
-      val M = api.M
-      val C = api.C
-
-      override def get(key: Int, beforeSequence: Option[Long]): Task[Option[Snapshot]] =
-        ???
-
-      override def put(key: Int, s: Snapshot): Task[scalaz.\/[Error, Snapshot]] =
-        ???
     }
   }
 }
