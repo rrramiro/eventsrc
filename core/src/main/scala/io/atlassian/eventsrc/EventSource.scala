@@ -171,7 +171,7 @@ trait EventSource[K, V, S] {
      * @return Either an Error or the event that was saved. Other non-specific errors should be available
      *         through the container F.
      */
-    protected[EventSource] def put(event: Event): F[Error \/ Event]
+    def put(event: Event): F[Error \/ Event]
   }
 
   /**

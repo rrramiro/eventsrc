@@ -4,10 +4,9 @@ package dynamo
 import com.amazonaws.services.dynamodbv2.{ AmazonDynamoDBClient => DynamoClient }
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException
 
-import io.atlassian.aws.dynamodb.DynamoDB
-import io.atlassian.aws.dynamodb.{ Column, Marshaller, Page, Query, StoreValue, TableDefinition, Unmarshaller }
+import io.atlassian.aws.dynamodb.{ Column, Comparison, Decoder, DynamoDB, Encoder, Marshaller, Page, Query, StoreValue, TableDefinition, Unmarshaller }
 import io.atlassian.aws.OverwriteMode
-import kadai.Invalid
+import kadai.{ Attempt, Invalid }
 import scalaz.{ Catchable, Monad, Show, \/, \/-, -\/, ~> }
 import scalaz.concurrent.Task
 import scalaz.stream.Process
@@ -20,23 +19,47 @@ object DynamoEventSource {
   }
 }
 
-trait DynamoEventSource[K, V] extends LongSequencedEventSource[K, V] {
+trait DynamoEventSource[K, V, S] extends EventSource[K, V, S] {
   import DynamoEventSource._
   import EventSource.Error
 
-  abstract class DAO[F[_]](awsClient: DynamoClient, tableName: String)(
-    implicit M: Monad[F],
-    C: Catchable[F],
-    ToF: Task ~> F,
+  /**
+   * Pass in the marshallers and unmarshallers to turn our data into dynamo maps
+   */
+  case class Marshallers(
     keyCol: Column[K],
+    seqCol: Column[S],
     marshallKey: Marshaller[K],
+    marshallSeq: Marshaller[S],
     marshallEventId: Marshaller[EventId],
     marshallEvent: Marshaller[Event],
-    unmarshall: Unmarshaller[Event]) extends Storage[F] {
+    unmarshall: Unmarshaller[Event])
+
+  abstract class DAO[F[_]](awsClient: DynamoClient, tableName: String, marshallers: Marshallers)(
+    implicit M: Monad[F],
+    C: Catchable[F],
+    ToF: Task ~> F) extends Storage[F] {
 
     import scalaz.syntax.monad._
+    implicit val keyCol: Column[K] = marshallers.keyCol
+    implicit val seqCol: Column[S] = marshallers.seqCol
+    implicit val marshallKey: Marshaller[K] = marshallers.marshallKey
+    implicit val marshallSeq: Marshaller[S] = marshallers.marshallSeq
+    implicit val marshallEventId: Marshaller[EventId] = marshallers.marshallEventId
+    implicit val marshallEvent: Marshaller[Event] = marshallers.marshallEvent
+    implicit val unmarshall: Unmarshaller[Event] = marshallers.unmarshall
 
     implicit def tableDef: TableDefinition[EventId, Event]
+
+    implicit def TransformOpEncode: Encoder[Transform.Op] =
+      Encoder[String].contramap { Transform.Op.apply }
+    implicit def TransformOpDecode: Decoder[Transform.Op] =
+      Decoder[String].flatMap {
+        _ match {
+          case Transform.Op(op) => Decoder.ok(op)
+          case op               => Decoder.from { Attempt.fail(s"Invalid operation: $op") }
+        }
+      }
 
     /**
      * To return a stream of events from Dynamo, we first need to execute a query, then emit results, and then optionally
@@ -45,7 +68,7 @@ trait DynamoEventSource[K, V] extends LongSequencedEventSource[K, V] {
      * @param key The key
      * @return Stream of events.
      */
-    override def get(key: K, fromSeq: Option[Long]): Process[F, Event] = {
+    override def get(key: K, fromSeq: Option[S]): Process[F, Event] = {
 
       import Process._
 
@@ -60,7 +83,15 @@ trait DynamoEventSource[K, V] extends LongSequencedEventSource[K, V] {
           }
         }
 
-      loop(requestPage(Query.forHash[K, EventId, Event](key))).translate(ToF)
+      loop {
+        requestPage {
+          fromSeq.fold {
+            Query.forHash[K, EventId, Event](key)
+          } {
+            seq => Query.forHashAndRange[K, S, EventId, Event](key, seq, Comparison.Gte)
+          }
+        }
+      }.translate(ToF)
     }
 
     /**
