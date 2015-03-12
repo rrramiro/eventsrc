@@ -8,5 +8,4 @@ trait EventTypes {
   object Reason {
     def apply(m: String): Reason = Tag.apply(m)
   }
-
 }

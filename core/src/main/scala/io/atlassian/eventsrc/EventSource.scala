@@ -26,24 +26,6 @@ import scalaz.syntax.std.option._
  *       - conditional saves against a given hash and range key to prevent overwriting of a given record.
  */
 
-/**
- * EventSourceError represents any error conditions that are useful to represent for event sources. In particular,
- * we need to know about attempts to store duplicate events.
- */
-sealed trait EventSourceError
-object EventSourceError {
-  def noop: EventSourceError = Noop
-
-  def reject(s: NonEmptyList[Reason]): EventSourceError = Rejected(s)
-
-  case object DuplicateEvent extends EventSourceError
-
-  case class Rejected(s: NonEmptyList[Reason]) extends EventSourceError
-
-  // if the client rejects an update operation
-  case object Noop extends EventSourceError
-}
-
 object EventSource {
   sealed trait Result[A]
   object Result {
@@ -59,15 +41,34 @@ object EventSource {
     def reject[A](reasons: NonEmptyList[Reason]): Result[A] = Reject(reasons)
     def noop[A](): Result[A] = Noop()
   }
+
+  /**
+   * EventSource.Error represents any error conditions that are useful to represent for event sources. In particular,
+   * we need to know about attempts to store duplicate events.
+   */
+  sealed trait Error
+  object Error {
+    def noop: Error = Noop
+
+    def reject(s: NonEmptyList[Reason]): Error = Rejected(s)
+
+    case object DuplicateEvent extends Error
+
+    case class Rejected(s: NonEmptyList[Reason]) extends Error
+
+    // if the client rejects an update operation
+    case object Noop extends Error
+  }
 }
 
 /**
  * The main trait that implementations of an event source need to extend.
  * @tparam K The key against which values are stored.
  * @tparam V Values to be store
- * @tparam S Type of the sequence. Needs to have a Sequence type class implementation.          
+ * @tparam S Type of the sequence. Needs to have a Sequence type class implementation.
  */
 trait EventSource[K, V, S] {
+  import EventSource._
 
   def S: Sequence[S]
 
@@ -101,11 +102,11 @@ trait EventSource[K, V, S] {
    *
    * This is only used internally within an event source.
    */
-  sealed trait Snapshot {
+  private[eventsrc] sealed trait Snapshot {
     import Snapshot._
     def value: Option[V]
-    def id: Option[EventId] = 
-      this.fold(None, { case (_, at, _) => Some(at) }, { case (at, _)  => Some(at) })
+    def id: Option[EventId] =
+      this.fold(None, { case (_, at, _) => Some(at) }, { case (at, _) => Some(at) })
 
     def fold[X](none: => X, value: (V, EventId, DateTime) => X, deleted: (EventId, DateTime) => X): X =
       this match {
@@ -115,7 +116,7 @@ trait EventSource[K, V, S] {
       }
   }
 
-  object Snapshot {
+  private[eventsrc] object Snapshot {
     /**
      * There is no snapshot... i.e. no events have been saved.
      */
@@ -162,17 +163,18 @@ trait EventSource[K, V, S] {
      * Retrieve a stream of events from the underlying data store. This stream should take care of pagination and
      * cleanup of any underlying resources (e.g. closing connections if required).
      * @param key The key
+     * @param fromSeq The starting sequence to get events from
      * @return Stream of events.
      */
-    def get(key: K, sequence: S): Process[F, Event]
+    def get(key: K, fromSeq: Option[S] = None): Process[F, Event]
 
     /**
      * Save the given event.
      *
-     * @return Either an EventSourceError or the event that was saved. Other non-specific errors should be available
+     * @return Either an Error or the event that was saved. Other non-specific errors should be available
      *         through the container F.
      */
-    protected[EventSource] def put(event: Event): F[EventSourceError \/ Event]
+    protected[EventSource] def put(event: Event): F[Error \/ Event]
 
     /**
      * Essentially a runFoldMap on the given process to produce a snapshot after collapsing a stream of events.
@@ -185,13 +187,13 @@ trait EventSource[K, V, S] {
       }.runLastOr(snapshot)
   }
 
-  trait SnapshotStorage[F[_]] {
+  private[eventsrc] trait SnapshotStorage[F[_]] {
     protected implicit def M: Monad[F]
     protected implicit def C: Catchable[F]
 
     def get(key: K, beforeSequence: Option[S]): F[Option[Snapshot]]
 
-    def put(key: K, s: Snapshot): F[EventSourceError \/ Snapshot]
+    def put(key: K, s: Snapshot): F[Error \/ Snapshot]
   }
 
   /**
@@ -259,20 +261,20 @@ trait EventSource[K, V, S] {
       for {
         old <- latestSnapshot(key)
         op = operation.run(old.value)
-        result <- op.fold(EventSourceError.noop.left[Event].point[F], EventSourceError.reject(_).left[Event].point[F], v => store.put(Event.next(key, old, v)))
+        result <- op.fold(Error.noop.left[Event].point[F], Error.reject(_).left[Event].point[F], v => store.put(Event.next(key, old, v)))
         transform <- result match {
-          case -\/(EventSourceError.DuplicateEvent) =>
+          case -\/(Error.DuplicateEvent) =>
             save(key, operation)
-          case -\/(EventSourceError.Noop) =>
+          case -\/(Error.Noop) =>
             EventSource.Result.noop[V]().point[F]
-          case -\/(EventSourceError.Rejected(r)) =>
+          case -\/(Error.Rejected(r)) =>
             EventSource.Result.reject[V](r).point[F]
           case \/-(event) =>
             ((old.value, event.operation) match {
-              case (None, Transform.Insert(e))    => EventSource.Result.insert(e)
-              case (Some(o), Transform.Insert(n)) => EventSource.Result.update(o, n)
-              case (Some(o), Transform.Delete)    => EventSource.Result.delete(o)
-              case (None, Transform.Delete)       => EventSource.Result.noop[V]() // shouldn't happen, only here for exhaustiveness
+              case (None, Transform.Insert(e))    => Result.insert(e)
+              case (Some(o), Transform.Insert(n)) => Result.update(o, n)
+              case (Some(o), Transform.Delete)    => Result.delete(o)
+              case (None, Transform.Delete)       => Result.noop[V]() // shouldn't happen, only here for exhaustiveness
             }).point[F]
         }
       } yield transform

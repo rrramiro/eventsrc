@@ -11,6 +11,8 @@ import scalaz.stream.Process
  * Simple event store that keeps lists of commits for a key in a mutable map
  */
 class MemoryEventSource extends LongSequencedEventSource[Int, String] {
+  import EventSource.Error
+
   val map = collection.concurrent.TrieMap[Int, List[Event]]()
 
   object api extends API[Task] {
@@ -21,18 +23,29 @@ class MemoryEventSource extends LongSequencedEventSource[Int, String] {
       val M = api.M
       val C = api.C
 
-      override def get(key: Int): Process[Task, Event] =
+      override def get(key: Int, seq: Long): Process[Task, Event] =
         map.get(key) match {
           case None     => Process.halt
           case Some(cs) => Process.emitAll(cs.reverse)
         }
 
-      override def put(ev: Event): Task[EventSourceError \/ Event] =
+      override def put(ev: Event): Task[Error \/ Event] =
         Task {
           // Just assume there are no duplicates for this test
           map += (ev.id.key -> (ev :: map.getOrElse(ev.id.key, Nil)))
           ev.right
         }
+    }
+
+    override object snapshotStore extends SnapshotStorage[Task] {
+      val M = api.M
+      val C = api.C
+
+      override def get(key: Int, beforeSequence: Option[Long]): Task[Option[Snapshot]] =
+        ???
+
+      override def put(key: Int, s: Snapshot): Task[scalaz.\/[Error, Snapshot]] =
+        ???
     }
   }
 }

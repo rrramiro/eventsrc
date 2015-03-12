@@ -5,6 +5,7 @@ package io.atlassian.eventsrc
  * @tparam K The key against which values are stored.
  * @tparam V Values to be store
  */
-trait LongSequencedEventSource[K, V] extends EventSource[K, V, LongSequence] {
-  def S: Sequence[LongSequence] = implicitly[Sequence[LongSequence]]
+trait LongSequencedEventSource[K, V] extends EventSource[K, V, Long] {
+  lazy val S: Sequence[Long] =
+    implicitly[Sequence[Long]]
 }
