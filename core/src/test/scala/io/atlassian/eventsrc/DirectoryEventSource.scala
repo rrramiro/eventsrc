@@ -49,7 +49,7 @@ class DirectoryEventSource(zone: DirectoryEventSource.ZoneId) extends EventStrea
   class AllUsersSnapshotStorage extends SnapshotStorage[Task, List[User]] {
     val map = collection.concurrent.TrieMap[DirectoryId, Snapshot[List[User]]]()
 
-    def get(key: DirectoryId, beforeSeq: Option[TwoPartSequence] = None): Task[Snapshot[List[User]]] =
+    def get(key: DirectoryId, sequence: SequenceQuery[TwoPartSequence]): Task[Snapshot[List[User]]] =
       Task {
         map.getOrElse(key, Snapshot.zero)
       }
@@ -120,3 +120,38 @@ class DirectoryEventSourceSpec extends SpecificationWithJUnit with ScalaCheck {
   }
   }
 }
+
+/**
+ * Idea for sharding:
+ *
+ * We have an API[Task, Prefix => Map[Username, UserId] ]
+ * i.e. V is a function
+ *
+ * Q) Do we want to have a different key for snapshot storage? Or provide other parameters?
+ * SnapshotStorage -
+ *  - put - How can we store a snapshot when it is a function?
+ *
+ * We actually want multiple APIs/SnapshotStorages - one for each prefix. We can create a new API for a request with a prefix specified.
+ *
+ *
+ * Q) Do we want to hash prefix? This will provide better balancing
+ *
+ * Q) Do we want to have snapshot keyed by something else? Is my API actually using the same Key?
+ *
+ * EventStream[K, S, E] - K helps identify the stream
+ * EventStorage - This needs to have the same K
+ *
+ * Snapshot and API - this is an independent key. How does this work?
+ *  - These need to be tied to an EventStream. We need to know how to get a key from whatever thing we get as input
+ *
+ * e.g. to add a user
+ *  - check for username uniqueness
+ *  - check for user email uniqueness. I want a map of all user emails. Specifically I want the user Id for a given email
+ *    - My API is actually get(email: Email): Option[UserId].
+ *      - This would get a Snapshot for email.
+ *        - Snapshot would be Snapshot[UserId]. The Snapshot storage implementation would get the prefix of the email, lookup the appropriate record and return.
+ *      - In this case it would get an event stream for all users (K = 'all').
+ *  -
+ *
+ * Q) How to update snapshots then? An event stream would need to know about all the snapshot storages.
+ */
