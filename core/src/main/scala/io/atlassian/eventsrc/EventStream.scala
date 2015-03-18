@@ -116,6 +116,10 @@ trait EventStream[K, S, E] {
     }
 
     def zero[V]: Snapshot[V] = NoSnapshot[V]()
+    def value[V](view: V, at: EventId, time: DateTime): Snapshot[V] =
+      Value(view, at, time)
+    def deleted[V](at: EventId, time: DateTime): Snapshot[V] =
+      Deleted(at, time)
   }
 
   /**
@@ -164,6 +168,15 @@ trait EventStream[K, S, E] {
       case class Success[A](event: E) extends Result[A]
       case class Reject[A](reasons: NonEmptyList[Reason]) extends Result[A]
       case class Noop[A]() extends Result[A]
+
+      def success[A](e: E): Result[A] =
+        Success(e)
+
+      def reject[A](r: NonEmptyList[Reason]): Result[A] =
+        Reject(r)
+
+      def noop[A]: Result[A] =
+        Noop()
     }
   }
 
@@ -194,10 +207,10 @@ trait EventStream[K, S, E] {
   /**
    * Implementations of this interface deal with persisting snapshots so that they don't need to be recomputed every time.
    * Specifically, implementations do NOT deal with generating snapshots, only storing/retrieving any persisted snapshot.
-   * @tparam F Coontainer around operations on an underlying data store e.g. Task.
+   * @tparam F Container around operations on an underlying data store e.g. Task.
    * @tparam V The type of the value wrapped by Snapshots that this store persists.
    */
-  trait SnapshotStorage[F[_], V] {
+  trait SnapshotStorage[F[_], KK, V] {
     /**
      * Retrieve a snapshot before the given sequence number. We typically specify a sequence number if we want to get
      * some old snapshot i.e. the latest persisted snapshot may have been generated after the point in time that we're
@@ -207,7 +220,7 @@ trait EventStream[K, S, E] {
      * @param sequence What sequence we want to get the snapshot for (earliest snapshot, latest, or latest before some sequence)
      * @return The snapshot, a NoSnapshot if there was no snapshot for the given conditions.
      */
-    def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[V]]
+    def get(key: KK, sequence: SequenceQuery[S]): F[Snapshot[V]]
 
     /**
      * Save a given snapshot
@@ -215,19 +228,19 @@ trait EventStream[K, S, E] {
      * @param snapshot The snapshot to save
      * @return Either a Throwable (for error) or the saved snapshot.
      */
-    def put(key: K, snapshot: Snapshot[V]): F[Throwable \/ Snapshot[V]]
+    def put(snapshotKey: KK, snapshot: Snapshot[V]): F[Throwable \/ Snapshot[V]]
   }
 
-  /**
-   * Dummy implementation that does not store snapshots.
-   */
-  class NoSnapshotStorage[F[_]: Monad, V] extends SnapshotStorage[F, V] {
-    def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[V]] =
-      Snapshot.zero[V].point[F]
-
-    def put(key: K, snapshot: Snapshot[V]): F[Throwable \/ Snapshot[V]] =
-      snapshot.right[Throwable].point[F]
-  }
+//  /**
+//   * Dummy implementation that does not store snapshots.
+//   */
+//  class NoSnapshotStorage[F[_]: Monad, V] extends SnapshotStorage[F, V] {
+//    def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[V]] =
+//      Snapshot.zero[V].point[F]
+//
+//    def put(key: K, snapshot: Snapshot[V]): F[Throwable \/ Snapshot[V]] =
+//      snapshot.right[Throwable].point[F]
+//  }
 
   /**
    * This is the main interface for consumers of the Event source. Implementations of this wrap logic for generating
@@ -239,7 +252,7 @@ trait EventStream[K, S, E] {
    *
    * @tparam F Container type for API operations. It needs to be a Monad and a Catchable (e.g. scalaz Task)
    */
-  trait API[F[_], V] {
+  trait API[F[_], KK, V] {
     import scalaz.syntax.monad._
 
     protected implicit def M: Monad[F]
@@ -253,7 +266,7 @@ trait EventStream[K, S, E] {
     /**
      * @return Underlying store of snapshots
      */
-    def snapshotStore: SnapshotStorage[F, V]
+    def snapshotStore: SnapshotStorage[F, KK, V]
 
     /**
      * Accumulator function for generating a view of the data from a previous view and a new event.
@@ -261,18 +274,20 @@ trait EventStream[K, S, E] {
      * @param e Event to add to previous view
      * @return New view with event added.
      */
-    def acc(v: Snapshot[V], e: Event): Snapshot[V]
+    def acc(key: KK)(v: Snapshot[V], e: Event): Snapshot[V]
+
+    def eventStreamKey(apiKey: KK): K
 
     /**
      * Return the current view of the data for key 'key'
      */
-    final def get(key: K): F[Option[V]] =
+    final def get(key: KK): F[Option[V]] =
       getSnapshot(key).map { _.value }
 
     /**
      * @return the current view wrapped in Snashot of the data for key 'key'
      */
-    final def getSnapshot(key: K): F[Snapshot[V]] =
+    final def getSnapshot(key: KK): F[Snapshot[V]] =
       getSnapshotAt(key, None)
 
     /**
@@ -281,13 +296,13 @@ trait EventStream[K, S, E] {
      * @param at If none, get me the latest. If some, get me the snapshot at that specific sequence.
      * @return
      */
-    private def getSnapshotAt(key: K, at: Option[S]): F[Snapshot[V]] =
+    private def getSnapshotAt(key: KK, at: Option[S]): F[Snapshot[V]] =
       for {
         persistedSnapshot <- snapshotStore.get(key, at.fold(SequenceQuery.latest[S])(SequenceQuery.before))
         fromSeq = persistedSnapshot.id.map { _.sequence }
         pred = at.fold[Event => Boolean] { _ => true } { seq => e => S.order.lessThanOrEqual(e.id.sequence, seq) }
-        events = eventStore.get(key, fromSeq).takeWhile(pred)
-        theSnapshot <- generateSnapshot(persistedSnapshot, events)
+        events = eventStore.get(eventStreamKey(key), fromSeq).takeWhile(pred)
+        theSnapshot <- generateSnapshot(persistedSnapshot, events, acc(key))
       } yield theSnapshot
 
     /**
@@ -296,7 +311,7 @@ trait EventStream[K, S, E] {
      * @param seq the sequence number of the event at which we want the see the view of the data.
      * @return view of the data at event with sequence 'seq'
      */
-    final def getAt(key: K, seq: S): F[Option[V]] =
+    final def getAt(key: KK, seq: S): F[Option[V]] =
       getSnapshotAt(key, Some(seq)).map { _.value }
 
     /**
@@ -305,12 +320,12 @@ trait EventStream[K, S, E] {
      * @param from Starting sequence number. None to get from the beginning of the stream.
      * @return a stream of Snapshots starting from sequence number 'from' (if defined).
      */
-    final def getHistory(key: K, from: Option[S]): F[Process[F, Snapshot[V]]] =
+    final def getHistory(key: KK, from: Option[S]): F[Process[F, Snapshot[V]]] =
       for {
         startingSnapshot <- getSnapshotAt(key, from)
-      } yield eventStore.get(key, startingSnapshot.id.map { _.sequence })
+      } yield eventStore.get(eventStreamKey(key), startingSnapshot.id.map { _.sequence })
         .scan[Snapshot[V]](startingSnapshot) {
-          case (view, event) => acc(view, event)
+          case (view, event) => acc(key)(view, event)
         }.drop(1)
 
     /**
@@ -321,12 +336,12 @@ trait EventStream[K, S, E] {
      * @param time The timestamp at which we want to see the view of the data
      * @return view of the data with events up to the given time stamp.
      */
-    final def getAt(key: K, time: DateTime): F[Option[V]] = {
+    final def getAt(key: KK, time: DateTime): F[Option[V]] = {
       import com.github.nscala_time.time.Implicits._
       // We need to get the earliest snapshot, then the stream of events from that snapshot
       for {
         earliestSnapshot <- snapshotStore.get(key, SequenceQuery.earliest[S])
-        value <- generateSnapshot(earliestSnapshot, eventStore.get(key, earliestSnapshot.id.map { _.sequence }).takeWhile { _.time <= time }).map { _.value }
+        value <- generateSnapshot(earliestSnapshot, eventStore.get(eventStreamKey(key), earliestSnapshot.id.map { _.sequence }).takeWhile { _.time <= time }, acc(key)).map { _.value }
       } yield value
     }
 
@@ -343,11 +358,11 @@ trait EventStream[K, S, E] {
      *
      * TODO - Consider adding some jitter and exponential backoff
      */
-    final def save(key: K, operation: Operation[V]): F[SaveResult[V]] =
+    final def save(key: KK, operation: Operation[V]): F[SaveResult[V]] =
       for {
         old <- getSnapshot(key)
         op = operation.run(old)
-        result <- op.fold(Error.noop.left[Event].point[F], Error.reject(_).left[Event].point[F], v => eventStore.put(Event.next(key, old, v)))
+        result <- op.fold(Error.noop.left[Event].point[F], Error.reject(_).left[Event].point[F], v => eventStore.put(Event.next(eventStreamKey(key), old, v)))
         transform <- result match {
           case -\/(Error.DuplicateEvent) =>
             save(key, operation)
@@ -356,7 +371,7 @@ trait EventStream[K, S, E] {
           case -\/(Error.Rejected(r)) =>
             SaveResult.reject[V](r).point[F]
           case \/-(event) =>
-            SaveResult.success(acc(old, event)).point[F]
+            SaveResult.success(acc(key)(old, event)).point[F]
         }
       } yield transform
 
@@ -365,9 +380,9 @@ trait EventStream[K, S, E] {
      * @param events The stream of events.
      * @return Container F that when executed provides the snapshot.
      */
-    private def generateSnapshot(start: Snapshot[V], events: Process[F, Event]): F[Snapshot[V]] =
+    private def generateSnapshot(start: Snapshot[V], events: Process[F, Event], f: (Snapshot[V], Event) => Snapshot[V]): F[Snapshot[V]] =
       events.pipe {
-        process1.fold(start)(acc)
+        process1.fold(start)(f)
       }.runLastOr(start)
   }  
 }
