@@ -123,8 +123,8 @@ trait EventStream[K, S, E] {
   }
 
   /**
-   * Result of saving an event to the stream. This is
-   * @tparam A Th
+   * Result of saving an event to the stream.
+   * @tparam A The aggregate type.
    */
   sealed trait SaveResult[A]
   object SaveResult {
@@ -143,7 +143,12 @@ trait EventStream[K, S, E] {
       Reject(reasons)
   }
 
-
+  /**
+   * Wraps an operation to save an event to an event stream. Saving to an event stream is through an API, which is tied
+   * to an aggregate type (wrapped in a Snapshot).
+   * @param run Function from a snapshot to an operation that should occur (i.e. should we save the event or reject it)
+   * @tparam V The type of the aggregate.
+   */
   case class Operation[V](run: Snapshot[V] => Operation.Result[V])
 
   object Operation {
@@ -208,6 +213,7 @@ trait EventStream[K, S, E] {
    * Implementations of this interface deal with persisting snapshots so that they don't need to be recomputed every time.
    * Specifically, implementations do NOT deal with generating snapshots, only storing/retrieving any persisted snapshot.
    * @tparam F Container around operations on an underlying data store e.g. Task.
+   * @tparam KK The type of the key for snapshots. This does not need to be the same as for the event stream itself.
    * @tparam V The type of the value wrapped by Snapshots that this store persists.
    */
   trait SnapshotStorage[F[_], KK, V] {
@@ -224,33 +230,39 @@ trait EventStream[K, S, E] {
 
     /**
      * Save a given snapshot
-     * @param key The key
+     * @param snapshotKey The key
      * @param snapshot The snapshot to save
      * @return Either a Throwable (for error) or the saved snapshot.
      */
     def put(snapshotKey: KK, snapshot: Snapshot[V]): F[Throwable \/ Snapshot[V]]
   }
 
-//  /**
-//   * Dummy implementation that does not store snapshots.
-//   */
-//  class NoSnapshotStorage[F[_]: Monad, V] extends SnapshotStorage[F, V] {
-//    def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[V]] =
-//      Snapshot.zero[V].point[F]
-//
-//    def put(key: K, snapshot: Snapshot[V]): F[Throwable \/ Snapshot[V]] =
-//      snapshot.right[Throwable].point[F]
-//  }
+  /**
+   * Dummy implementation that does not store snapshots.
+   */
+  object SnapshotStorage {
+    def none[F[_]: Monad, KK, V]: SnapshotStorage[F, KK, V] =
+      new NoSnapshotStorage
+
+    private class NoSnapshotStorage[F[_]: Monad, KK, V] extends SnapshotStorage[F, KK, V] {
+      def get(key: KK, sequence: SequenceQuery[S]): F[Snapshot[V]] =
+        Snapshot.zero[V].point[F]
+
+      def put(key: KK, snapshot: Snapshot[V]): F[Throwable \/ Snapshot[V]] =
+        snapshot.right[Throwable].point[F]
+    }
+  }
 
   /**
    * This is the main interface for consumers of the Event source. Implementations of this wrap logic for generating
-   * a view of data (wrapped in a Snapshot) from an event stream of E events.
+   * a view of data or aggregate (wrapped in a Snapshot) from an event stream of E events.
    *
-   * Implementations contain logic to create a transform given a value to save.
-   *
-   * Upon construction of an API, a suitable Events store needs to be provided.
+   * Upon construction of an API, a suitable Events store, snapshot store, accumulator, and key transform
+   * need to be provided.
    *
    * @tparam F Container type for API operations. It needs to be a Monad and a Catchable (e.g. scalaz Task)
+   * @tparam KK Key type for the aggregate (may be different from the key for the event stream)
+   * @tparam V Aggregate type
    */
   trait API[F[_], KK, V] {
     import scalaz.syntax.monad._
@@ -276,6 +288,11 @@ trait EventStream[K, S, E] {
      */
     def acc(key: KK)(v: Snapshot[V], e: Event): Snapshot[V]
 
+    /**
+     * Transform a given aggregate key to the key for the underlying event stream
+     * @param apiKey The aggregate key
+     * @return event stream key
+     */
     def eventStreamKey(apiKey: KK): K
 
     /**
@@ -291,10 +308,9 @@ trait EventStream[K, S, E] {
       getSnapshotAt(key, None)
 
     /**
-     *
-     * @param key
+     * @param key The key of the aggregate to retrieve
      * @param at If none, get me the latest. If some, get me the snapshot at that specific sequence.
-     * @return
+     * @return A Snapshot for the aggregate at the given sequence number.
      */
     private def getSnapshotAt(key: KK, at: Option[S]): F[Snapshot[V]] =
       for {
