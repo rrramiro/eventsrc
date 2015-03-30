@@ -3,7 +3,7 @@ package io.atlassian.eventsrc
 import org.joda.time.DateTime
 
 import scalaz._
-import scalaz.stream.{process1, Process}
+import scalaz.stream.{ process1, Process }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
 
@@ -38,9 +38,13 @@ object EventStream {
  * @tparam E Event payload that the stream deals with.
  * @tparam S Type of the sequence. Needs to have a Sequence type class implementation.
  */
-trait EventStream[K, S, E] {
+trait EventStream {
   import EventStream._
-  
+
+  type K
+  type S
+  type E
+
   def S: Sequence[S]
 
   /**
@@ -73,7 +77,7 @@ trait EventStream[K, S, E] {
    * S.at is value S.value. The value is somehow generated from the event stream (see API.acc)
    *
    * The event Id is quite a useful thing in addition to the value of the snapshot.
-   * 
+   *
    * @tparam A The type of the value wrapped by the Snapshot
    */
   sealed trait Snapshot[A] {
@@ -221,7 +225,7 @@ trait EventStream[K, S, E] {
      * Retrieve a snapshot before the given sequence number. We typically specify a sequence number if we want to get
      * some old snapshot i.e. the latest persisted snapshot may have been generated after the point in time that we're
      * interested in.
-     * 
+     *
      * @param key The key
      * @param sequence What sequence we want to get the snapshot for (earliest snapshot, latest, or latest before some sequence)
      * @return The snapshot, a NoSnapshot if there was no snapshot for the given conditions.
@@ -400,5 +404,5 @@ trait EventStream[K, S, E] {
       events.pipe {
         process1.fold(start)(f)
       }.runLastOr(start)
-  }  
+  }
 }

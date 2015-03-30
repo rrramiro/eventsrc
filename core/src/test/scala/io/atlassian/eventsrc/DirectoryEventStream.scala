@@ -1,10 +1,10 @@
 package io.atlassian.eventsrc
 
 import org.joda.time.DateTime
-import org.scalacheck.{Gen, Arbitrary, Prop}
-import org.specs2.{ScalaCheck, SpecificationWithJUnit}
+import org.scalacheck.{ Gen, Arbitrary, Prop }
+import org.specs2.{ ScalaCheck, SpecificationWithJUnit }
 
-import scalaz.{Catchable, Monad, \/}
+import scalaz.{ Catchable, Monad, \/ }
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.syntax.either._
@@ -14,7 +14,7 @@ import Arbitrary.arbitrary
 /**
  * TODO: Document this file here
  */
-object DirectoryEventSource {
+object DirectoryEventStream {
   type DirectoryId = String
   type ZoneId = Long
   type Username = String
@@ -26,11 +26,16 @@ object DirectoryEventSource {
 sealed trait DirectoryEvent
 case class AddUser(user: User) extends DirectoryEvent
 
-case class User(id: DirectoryEventSource.UserId, username: DirectoryEventSource.Username)
+import DirectoryEventStream._
 
-class DirectoryEventSource(zone: DirectoryEventSource.ZoneId) extends EventStream[DirectoryEventSource.DirectoryId, TwoPartSequence, DirectoryEvent] {
-  import DirectoryEventSource._
+case class User(id: UserId, username: Username)
+
+class DirectoryEventStream(zone: ZoneId) extends EventStream {
   import EventStream.Error
+
+  type K = DirectoryId
+  type S = TwoPartSequence
+  type E = DirectoryEvent
 
   override lazy val S = TwoPartSequence.twoPartSequence(zone)
 
@@ -39,7 +44,7 @@ class DirectoryEventSource(zone: DirectoryEventSource.ZoneId) extends EventStrea
 
     override def get(key: DirectoryId, fromOption: Option[TwoPartSequence]): Process[Task, Event] =
       map.get(key) match {
-        case None     => Process.halt
+        case None => Process.halt
         case Some(cs) =>
           Process.emitAll(cs.reverse.dropWhile { ev => fromOption.fold(false) { from => S.order.lessThanOrEqual(ev.id.sequence, from) } })
       }
@@ -131,14 +136,13 @@ class DirectoryEventSource(zone: DirectoryEventSource.ZoneId) extends EventStrea
   }
 }
 
-
 // Test - Add multiple users, Add duplicate users, use sharded storage, snapshot storage
-class DirectoryEventSourceSpec extends SpecificationWithJUnit with ScalaCheck {
-  import DirectoryEventSource._
+class DirectoryEventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
+  import DirectoryEventStream._
 
   def is =
     s2"""
-        DirectoryEventSource supports
+        DirectoryEventStream supports
           Adding multiple users (store list of users) $addMultipleUsers
           Checking for duplicate usernames (store list of users) $duplicateUsername
           Adding multiple users (store list of users and snapshot) $addMultipleUsersWithSnapshot
@@ -149,7 +153,6 @@ class DirectoryEventSourceSpec extends SpecificationWithJUnit with ScalaCheck {
 
       """
 
-
   implicit val ArbitraryUser: Arbitrary[User] =
     Arbitrary(
       for {
@@ -158,39 +161,40 @@ class DirectoryEventSourceSpec extends SpecificationWithJUnit with ScalaCheck {
       } yield User(uid.toString, name)
     )
 
-  def addMultipleUsers = Prop.forAll { (k: DirectoryId, u1: User, u2: User) => u1.username != u2.username ==> {
-    val eventSource = new DirectoryEventSource(1)
-    val api = new eventSource.AllUsersAPI(new eventSource.AllUsersSnapshotStorage)
+  def addMultipleUsers = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
+    u1.username != u2.username ==> {
+      val eventStream = new DirectoryEventStream(1)
+      val api = new eventStream.AllUsersAPI(new eventStream.AllUsersSnapshotStorage)
 
-    import eventSource._
-    import eventSource.Operation._
+      import eventStream._
+      import eventStream.Operation._
 
-    def addUniqueUser(u: User): eventSource.Operation[List[User]] =
-      Operation {
-        _.value.fold(Result.success[List[User]](AddUser(u))) { l =>
-          if (l.exists { _.username == u.username })
-            Result.reject(Reason("User with same username already exists").wrapNel)
-          else
-            Result.success(AddUser(u))
+      def addUniqueUser(u: User): eventStream.Operation[List[User]] =
+        Operation {
+          _.value.fold(Result.success[List[User]](AddUser(u))) { l =>
+            if (l.exists { _.username == u.username })
+              Result.reject(Reason("User with same username already exists").wrapNel)
+            else
+              Result.success(AddUser(u))
+          }
         }
-      }
 
-    (for {
-      _ <- api.save(k, addUniqueUser(u1))
-      _ <- api.save(k, addUniqueUser(u2))
-      allUsers <- api.get(k)
-    } yield allUsers).run.get must containTheSameElementsAs(List(u2, u1))
+      (for {
+        _ <- api.save(k, addUniqueUser(u1))
+        _ <- api.save(k, addUniqueUser(u2))
+        allUsers <- api.get(k)
+      } yield allUsers).run.get must containTheSameElementsAs(List(u2, u1))
     }
   }
 
   def duplicateUsername = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
-    val eventSource = new DirectoryEventSource(1)
-    val api = new eventSource.AllUsersAPI(new eventSource.AllUsersSnapshotStorage)
+    val eventStream = new DirectoryEventStream(1)
+    val api = new eventStream.AllUsersAPI(new eventStream.AllUsersSnapshotStorage)
 
-    import eventSource._
-    import eventSource.Operation._
+    import eventStream._
+    import eventStream.Operation._
 
-    def addUniqueUser(u: User): eventSource.Operation[List[User]] =
+    def addUniqueUser(u: User): eventStream.Operation[List[User]] =
       Operation {
         _.value.fold(Result.success[List[User]](AddUser(u))) { l =>
           if (l.exists { _.username == u.username })
@@ -208,42 +212,43 @@ class DirectoryEventSourceSpec extends SpecificationWithJUnit with ScalaCheck {
     } yield allUsers).run.get must containTheSameElementsAs(List(u1))
   }
 
-  def addMultipleUsersWithSnapshot = Prop.forAll { (k: DirectoryId, u1: User, u2: User) => u1.username != u2.username ==> {
-    val eventSource = new DirectoryEventSource(1)
-    val snapshotStorage = new eventSource.AllUsersSnapshotStorage
-    val api = new eventSource.AllUsersAPI(snapshotStorage)
+  def addMultipleUsersWithSnapshot = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
+    u1.username != u2.username ==> {
+      val eventStream = new DirectoryEventStream(1)
+      val snapshotStorage = new eventStream.AllUsersSnapshotStorage
+      val api = new eventStream.AllUsersAPI(snapshotStorage)
 
-    import eventSource._
-    import eventSource.Operation._
+      import eventStream._
+      import eventStream.Operation._
 
-    def addUniqueUser(u: User): eventSource.Operation[List[User]] =
-      Operation {
-        _.value.fold(Result.success[List[User]](AddUser(u))) { l =>
-          if (l.exists { _.username == u.username })
-            Result.reject(Reason("User with same username already exists").wrapNel)
-          else
-            Result.success(AddUser(u))
+      def addUniqueUser(u: User): eventStream.Operation[List[User]] =
+        Operation {
+          _.value.fold(Result.success[List[User]](AddUser(u))) { l =>
+            if (l.exists { _.username == u.username })
+              Result.reject(Reason("User with same username already exists").wrapNel)
+            else
+              Result.success(AddUser(u))
+          }
         }
-      }
 
-    (for {
-      _ <- api.save(k, addUniqueUser(u1))
-      _ <- snapshotStorage.put(k, Snapshot.value(List(u1), EventId(k, eventSource.S.first), DateTime.now))
-      _ <- api.save(k, addUniqueUser(u2))
-      allUsers <- api.get(k)
-    } yield allUsers).run.get must containTheSameElementsAs(List(u2, u1))
-  }
+      (for {
+        _ <- api.save(k, addUniqueUser(u1))
+        _ <- snapshotStorage.put(k, Snapshot.value(List(u1), EventId(k, eventStream.S.first), DateTime.now))
+        _ <- api.save(k, addUniqueUser(u2))
+        allUsers <- api.get(k)
+      } yield allUsers).run.get must containTheSameElementsAs(List(u2, u1))
+    }
   }
 
   def duplicateUsernameWithSnapshot = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
-    val eventSource = new DirectoryEventSource(1)
-    val snapshotStorage = new eventSource.AllUsersSnapshotStorage
-    val api = new eventSource.AllUsersAPI(snapshotStorage)
+    val eventStream = new DirectoryEventStream(1)
+    val snapshotStorage = new eventStream.AllUsersSnapshotStorage
+    val api = new eventStream.AllUsersAPI(snapshotStorage)
 
-    import eventSource._
-    import eventSource.Operation._
+    import eventStream._
+    import eventStream.Operation._
 
-    def addUniqueUser(u: User): eventSource.Operation[List[User]] =
+    def addUniqueUser(u: User): eventStream.Operation[List[User]] =
       Operation {
         _.value.fold(Result.success[List[User]](AddUser(u))) { l =>
           if (l.exists { _.username == u.username })
@@ -256,22 +261,22 @@ class DirectoryEventSourceSpec extends SpecificationWithJUnit with ScalaCheck {
     val user2ToSave = u2.copy(username = u1.username)
     (for {
       _ <- api.save(k, addUniqueUser(u1))
-      _ <- snapshotStorage.put(k, Snapshot.value(List(u1), EventId(k, eventSource.S.first), DateTime.now))
+      _ <- snapshotStorage.put(k, Snapshot.value(List(u1), EventId(k, eventStream.S.first), DateTime.now))
       _ <- api.save(k, addUniqueUser(user2ToSave))
       allUsers <- api.get(k)
     } yield allUsers).run.get must containTheSameElementsAs(List(u1))
   }
 
   def duplicateUsernameSharded = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
-    val eventSource = new DirectoryEventSource(1)
-    val snapshotStorage = new eventSource.ShardedUsernameToIdMappingSnapshotStorage
-    val api1 = new eventSource.AllUsersAPI(new eventSource.AllUsersSnapshotStorage)
-    val api2 = new eventSource.ShardedUsernameAPI(snapshotStorage)
+    val eventStream = new DirectoryEventStream(1)
+    val snapshotStorage = new eventStream.ShardedUsernameToIdMappingSnapshotStorage
+    val api1 = new eventStream.AllUsersAPI(new eventStream.AllUsersSnapshotStorage)
+    val api2 = new eventStream.ShardedUsernameAPI(snapshotStorage)
 
-    import eventSource._
-    import eventSource.Operation._
+    import eventStream._
+    import eventStream.Operation._
 
-    def addUniqueUser(u: User): eventSource.Operation[List[User]] =
+    def addUniqueUser(u: User): eventStream.Operation[List[User]] =
       Operation {
         _.value.fold(Result.success[List[User]](AddUser(u))) { l =>
           if (l.exists { _.username == u.username })
@@ -301,15 +306,15 @@ class DirectoryEventSourceSpec extends SpecificationWithJUnit with ScalaCheck {
   }
 
   def duplicateUsernameShardedWithSnapshot = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
-    val eventSource = new DirectoryEventSource(1)
-    val snapshotStorage = new eventSource.ShardedUsernameToIdMappingSnapshotStorage
-    val api1 = new eventSource.AllUsersAPI(new eventSource.AllUsersSnapshotStorage)
-    val api2 = new eventSource.ShardedUsernameAPI(snapshotStorage)
+    val eventStream = new DirectoryEventStream(1)
+    val snapshotStorage = new eventStream.ShardedUsernameToIdMappingSnapshotStorage
+    val api1 = new eventStream.AllUsersAPI(new eventStream.AllUsersSnapshotStorage)
+    val api2 = new eventStream.ShardedUsernameAPI(snapshotStorage)
 
-    import eventSource._
-    import eventSource.Operation._
+    import eventStream._
+    import eventStream.Operation._
 
-    def addUniqueUser(u: User): eventSource.Operation[List[User]] =
+    def addUniqueUser(u: User): eventStream.Operation[List[User]] =
       Operation {
         _.value.fold(Result.success[List[User]](AddUser(u))) { l =>
           if (l.exists { _.username == u.username })
@@ -335,7 +340,7 @@ class DirectoryEventSourceSpec extends SpecificationWithJUnit with ScalaCheck {
 
     saveUser(u1).attemptRun
     // Manually save a snapshot
-    snapshotStorage.put((k, u1.username), Snapshot.value(u1.id, EventId(k, eventSource.S.first), DateTime.now)).run
+    snapshotStorage.put((k, u1.username), Snapshot.value(u1.id, EventId(k, eventStream.S.first), DateTime.now)).run
     saveUser(user2ToSave).run must throwA[Exception] and
       (api1.get(k).run.get must containTheSameElementsAs(List(u1)))
   }
