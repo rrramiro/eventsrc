@@ -1,4 +1,4 @@
-package io.atlassian.eventsrc
+package io.atlassian.event.source
 
 import org.scalacheck.{Gen, Arbitrary}
 import org.scalacheck.Arbitrary._

@@ -1,4 +1,5 @@
-package io.atlassian.eventsrc
+package io.atlassian.event
+package source
 package dynamo
 
 import com.amazonaws.services.dynamodbv2.{ AmazonDynamoDBClient => DynamoClient }
