@@ -1,4 +1,5 @@
-package io.atlassian.eventsrc
+package io.atlassian.event
+package source
 
 import scalaz.{ Catchable, Monad, \/ }
 import scalaz.std.option._

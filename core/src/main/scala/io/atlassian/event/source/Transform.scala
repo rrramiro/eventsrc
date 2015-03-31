@@ -1,4 +1,5 @@
-package io.atlassian.eventsrc
+package io.atlassian.event
+package source
 
 import scalaz.std.option._
 import scalaz.syntax.std.option._

@@ -1,4 +1,5 @@
-package io.atlassian.eventsrc
+package io.atlassian.event
+package source
 
 import org.junit.runner.RunWith
 import org.specs2.SpecificationWithJUnit
