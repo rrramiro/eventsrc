@@ -33,15 +33,13 @@ object EventStream {
  * interfaces that need to be implemented to expose an API for consumers, and also to store events and any caches of
  * views.
  *
- * TODO - Should this replace EventSource, or should we make EventSource implement this?
- *
  * @tparam F Container type for API operations. It needs to be a Monad and a Catchable (e.g. scalaz Task)
  */
 abstract class EventStream[F[_]: Monad: Catchable] {
   import EventStream._
 
   // The internal key against which values are stored.
-  type KK // internal key
+  type KK
 
   // Type of the sequence. Needs to have a Sequence type class implementation.
   type S
@@ -80,8 +78,6 @@ abstract class EventStream[F[_]: Monad: Catchable] {
 
     /**
      * Transform a given aggregate key to the key for the underlying event stream
-     * @param apiKey The aggregate key
-     * @return event stream key
      */
     protected def eventStreamKey: K => KK
 
@@ -158,12 +154,12 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      * given the current Snapshot if there is one.
      */
     /*
-   * To save a new value, we need to get the latest snapshot in order to get the existing view of data and the
-   * latest event Id. Then we create a suitable transform and event and try to save it. Upon duplicate event,
-   * try the operation again (highly unlikely that this situation would occur).
-   *
-   * TODO - Consider adding some jitter and exponential backoff
-   */
+     * To save a new value, we need to get the latest snapshot in order to get the existing view of data and the
+     * latest event Id. Then we create a suitable transform and event and try to save it. Upon duplicate event,
+     * try the operation again (highly unlikely that this situation would occur).
+     *
+     * TODO - Consider adding some jitter and exponential backoff
+     */
     final def save(key: K, operation: Operation[K, S, V, E]): F[SaveResult[K, S, V]] =
       for {
         old <- getSnapshot(key)
@@ -194,5 +190,35 @@ abstract class EventStream[F[_]: Monad: Catchable] {
       events.pipe {
         process1.fold(start)(f)
       }.runLastOr(start)
+
+    /**
+     * Updates stored snapshot that this API wraps.
+     * @param key The key
+     * @param forceStartAt If present, this will regenerate a snapshot starting from events at the specified sequence number.
+     *                     This should only be used when it is known that preceding events can be ignored. For example
+     *                     when new entities are added, there are no views of those entities before the events that add
+     *                     them!
+     * @return The saved snapshot
+     */
+    def refreshSnapshot(key: K, forceStartAt: Option[S]): F[Throwable \/ Snapshot[K, S, V]] =
+      forceStartAt match {
+        case None =>
+          for {
+            latestStored <- snapshotStore.get(key, SequenceQuery.latest)
+            events = eventStore.get(eventStreamKey(key), latestStored.seq)
+            latestSnapshot <- generateSnapshot(latestStored, events, acc(key))
+            saveResult <-
+              if (latestSnapshot.seq != latestStored.seq)
+                snapshotStore.put(key, latestSnapshot)
+              else
+                latestSnapshot.right[Throwable].point[F]
+          } yield saveResult
+
+        case start @ Some(s) =>
+          for {
+            snapshotToSave <- generateSnapshot(Snapshot.zero, eventStore.get(eventStreamKey(key), start), acc(key))
+            saveResult <- snapshotStore.put(key, snapshotToSave)
+          } yield saveResult
+      }
   }
 }

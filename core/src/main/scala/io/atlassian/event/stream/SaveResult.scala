@@ -5,9 +5,17 @@ import scalaz.NonEmptyList
 
 /**
  * Result of saving an event to the stream.
- * @tparam A The aggregate type.
  */
-sealed trait SaveResult[K, S, V]
+sealed trait SaveResult[K, S, V] {
+  import SaveResult._
+
+  def fold[X](s: Snapshot[K, S, V] => X, r: NonEmptyList[Reason] => X, n: => X): X =
+    this match {
+      case Success(v) => s(v)
+      case Reject(reasons) => r(reasons)
+      case Noop() => n
+    }
+}
 
 object SaveResult {
   // TODO - separate delete and insert/update cases?

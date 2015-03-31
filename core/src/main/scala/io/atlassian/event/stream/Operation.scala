@@ -9,9 +9,46 @@ import scalaz.NonEmptyList
  * @param run Function from a snapshot to an operation that should occur (i.e. should we save the event or reject it)
  * @tparam V The type of the aggregate.
  */
-case class Operation[K, S, V, E](run: Snapshot[K, S, V] => Operation.Result[E])
+case class Operation[K, S, V, E](run: Snapshot[K, S, V] => Operation.Result[E]) {
+  def apply(s: Snapshot[K, S, V]): Operation.Result[E] =
+    run(s)
+
+  def filter(p: V => Boolean, becauseReasons: => NonEmptyList[Reason]): Operation[K, S, V, E] =
+    Operation { s =>
+      if (s.value.isDefined)
+        if (s.value.exists(p)) run(s)
+        else Operation.Result.Reject(becauseReasons)
+      else Operation.Result.Noop()
+    }
+
+  def filter(v: DataValidator.Validator[V]): Operation[K, S, V, E] =
+    Operation { s =>
+      s.value.fold(Operation.Result.noop[E]) { sv =>
+        v(sv).fold(reasons => Operation.Result.reject(reasons),
+          _ => run(s)
+        )
+      }
+    }
+}
 
 object Operation {
+
+  def insert[K, S, V, E](e: E): Operation[K, S, V, E] =
+    Operation { _ => Result.success(e) }
+
+  object syntax {
+    implicit class ToOperationOps[E](val self: E) {
+      def op[K, S, V]: Operation[K, S, V, E] =
+        Operation.insert(self)
+
+      def updateOp[K, S, V](onlyIf: V => Boolean, reason: Reason = Reason("failed update predicate")): Operation[K, S, V, E] =
+        Operation.insert(self).filter(onlyIf, NonEmptyList(reason))
+
+      def updateOp[K, S, V](validator: DataValidator.Validator[V]): Operation[K, S, V, E] =
+        Operation.insert(self).filter(validator)
+    }
+  }
+
   sealed trait Result[E] {
     import Result._
 

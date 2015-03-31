@@ -25,8 +25,9 @@ import scalaz.syntax.std.option._
  *       - Records are keyed against a hash key (typically a unique identifier of business value) and a numeric range key
  *       - querying for a given hash key
  *       - conditional saves against a given hash and range key to prevent overwriting of a given record.
+ *
+ *  TODO - make EventSource sit on top of EventStream
  */
-
 object EventSource {
   sealed trait Result[A]
   object Result {
