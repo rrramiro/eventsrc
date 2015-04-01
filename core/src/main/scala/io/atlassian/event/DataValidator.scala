@@ -6,7 +6,7 @@ import scalaz.syntax.validation._
 object DataValidator {
   type Valid = Boolean
   type ValidationResult = ValidationNel[Reason, Valid]
-  type Validator[A] = A => ValidationResult
+  type Validator[A] = Option[A] => ValidationResult
   val success = true.successNel[Reason]
 
   implicit class stringValidatorSyntax(val s: String) extends AnyVal {

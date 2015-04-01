@@ -23,11 +23,10 @@ case class Operation[K, S, V, E](run: Snapshot[K, S, V] => Operation.Result[E]) 
 
   def filter(v: DataValidator.Validator[V]): Operation[K, S, V, E] =
     Operation { s =>
-      s.value.fold(Operation.Result.noop[E]) { sv =>
-        v(sv).fold(reasons => Operation.Result.reject(reasons),
-          _ => run(s)
-        )
-      }
+      v(s.value).fold(
+        reasons => Operation.Result.reject(reasons),
+        _ => run(s)
+      )
     }
 }
 

@@ -15,6 +15,7 @@ import Operation.Result
 
 class DirectoryEventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
   import DirectoryEventStream._
+  import Operation.syntax._
 
   def is =
     s2"""
@@ -157,15 +158,18 @@ class DirectoryEventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
       (api1.get(k).run.get must containTheSameElementsAs(List(u1)))
   }
 
+  import scalaz.syntax.std.option._
+  import DataValidator._
+
   def addUniqueUser(events: DirectoryEventStream)(u: User): Operation[DirectoryId, events.S, List[User], events.E] =
-    Operation {
-      _.value.fold(Result.success[events.E](AddUser(u))) { l =>
-        if (l.exists { _.username == u.username })
-          Result.reject(Reason("User with same username already exists").wrapNel)
-        else
-          Result.success(AddUser(u))
-      }
-    }
+    DirectoryEvent.addUser(u).op[DirectoryId, events.S, List[User]].filter { noDuplicateUsername(u) }
+
+  private def noDuplicateUsername(u: User): DataValidator.Validator[List[User]] =
+    ol =>
+      if ((ol | Nil).exists { _.username == u.username })
+        "User with same username already exists".fail
+      else
+        DataValidator.success
 }
 
 object DirectoryEventStream {
@@ -179,6 +183,10 @@ object DirectoryEventStream {
 
 sealed trait DirectoryEvent
 case class AddUser(user: User) extends DirectoryEvent
+object DirectoryEvent {
+  def addUser(user: User): DirectoryEvent =
+    AddUser(user)
+}
 
 import DirectoryEventStream._
 
