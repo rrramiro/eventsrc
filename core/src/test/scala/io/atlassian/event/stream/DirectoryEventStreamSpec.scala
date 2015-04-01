@@ -224,7 +224,7 @@ class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
             (id, t) => Snapshot.deleted(id, t)) // This should not happen
         }
 
-      def put(key: DirectoryUsername, view: Snapshot[DirectoryUsername, S, UserId]): Task[Throwable \/ Snapshot[DirectoryUsername, S, UserId]] =
+      def put(key: DirectoryUsername, view: Snapshot[DirectoryUsername, S, UserId]): Task[SnapshotStorage.Error \/ Snapshot[DirectoryUsername, S, UserId]] =
         Task {
           map.get(prefix(key)) match {
             case None =>
@@ -269,7 +269,7 @@ class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
           map.getOrElse(key, Snapshot.zero)
         }
 
-      def put(key: DirectoryId, view: Snapshot[DirectoryId, S, List[User]]): Task[Throwable \/ Snapshot[DirectoryId, S, List[User]]] =
+      def put(key: DirectoryId, view: Snapshot[DirectoryId, S, List[User]]): Task[SnapshotStorage.Error \/ Snapshot[DirectoryId, S, List[User]]] =
         Task {
           map += (key -> view)
           view.right

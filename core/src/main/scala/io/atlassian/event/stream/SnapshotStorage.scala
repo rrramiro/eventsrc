@@ -1,6 +1,8 @@
 package io.atlassian.event
 package stream
 
+import kadai.Invalid
+
 import scalaz.{ Monad, \/ }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
@@ -9,7 +11,7 @@ import scalaz.syntax.monad._
  * Implementations of this interface deal with persisting snapshots so that they don't need to be recomputed every time.
  * Specifically, implementations do NOT deal with generating snapshots, only storing/retrieving any persisted snapshot.
  * @tparam F Container around operations on an underlying data store e.g. Task.
- * @tparam KK The type of the key for snapshots. This does not need to be the same as for the event stream itself.
+ * @tparam K The type of the key for snapshots. This does not need to be the same as for the event stream itself.
  * @tparam V The type of the value wrapped by Snapshots that this store persists.
  */
 trait SnapshotStorage[F[_], K, S, V] {
@@ -30,7 +32,7 @@ trait SnapshotStorage[F[_], K, S, V] {
    * @param snapshot The snapshot to save
    * @return Either a Throwable (for error) or the saved snapshot.
    */
-  def put(snapshotKey: K, snapshot: Snapshot[K, S, V]): F[Throwable \/ Snapshot[K, S, V]]
+  def put(snapshotKey: K, snapshot: Snapshot[K, S, V]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]]
 }
 
 /**
@@ -44,7 +46,15 @@ object SnapshotStorage {
     def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[K, S, V]] =
       Snapshot.zero[K, S, V].point[F]
 
-    def put(key: K, snapshot: Snapshot[K, S, V]): F[Throwable \/ Snapshot[K, S, V]] =
-      snapshot.right[Throwable].point[F]
+    def put(key: K, snapshot: Snapshot[K, S, V]): F[Error \/ Snapshot[K, S, V]] =
+      snapshot.right[Error].point[F]
+  }
+
+  sealed trait Error
+  object Error {
+    def unknown(i: Invalid): Error =
+      Unknown(i)
+
+    case class Unknown(i: Invalid) extends Error
   }
 }

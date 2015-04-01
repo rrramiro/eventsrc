@@ -39,7 +39,7 @@ object Snapshot {
   /**
    * Events have been saved and there is a value stored.
    * @param view The value
-   * @param at Represents the point in the stream that this Snapshot is for
+   * @param s Represents the point in the stream that this Snapshot is for
    */
   case class Value[K, S, V](view: V, s: S, time: DateTime) extends Snapshot[K, S, V] {
     val value = Some(view)
@@ -47,7 +47,7 @@ object Snapshot {
 
   /**
    * Events have been saved and there is no value (i.e. the value has been deleted).
-   * @param at Represents the point in the stream
+   * @param s Represents the point in the stream
    */
   case class Deleted[K, S, V](s: S, time: DateTime) extends Snapshot[K, S, V] {
     val value = None

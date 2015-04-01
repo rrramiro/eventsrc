@@ -193,14 +193,16 @@ abstract class EventStream[F[_]: Monad: Catchable] {
 
     /**
      * Updates stored snapshot that this API wraps.
+     * TODO - How should we best expose this functionality. We need to be able to update stored snapshots asynchronously
+     * either lazily (i.e. on read) or eagerly (i.e. when we save a new event).
      * @param key The key
      * @param forceStartAt If present, this will regenerate a snapshot starting from events at the specified sequence number.
      *                     This should only be used when it is known that preceding events can be ignored. For example
      *                     when new entities are added, there are no views of those entities before the events that add
      *                     them!
-     * @return The saved snapshot
+     * @return Error when saving snapshot or the snapshot that was saved.
      */
-    def refreshSnapshot(key: K, forceStartAt: Option[S]): F[Throwable \/ Snapshot[K, S, V]] =
+    final def refreshSnapshot(key: K, forceStartAt: Option[S]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
       forceStartAt match {
         case None =>
           for {
@@ -209,16 +211,28 @@ abstract class EventStream[F[_]: Monad: Catchable] {
             latestSnapshot <- generateSnapshot(latestStored, events, acc(key))
             saveResult <-
               if (latestSnapshot.seq != latestStored.seq)
-                snapshotStore.put(key, latestSnapshot)
+                saveSnapshot(key, latestSnapshot)
               else
-                latestSnapshot.right[Throwable].point[F]
+                latestSnapshot.right[SnapshotStorage.Error].point[F]
           } yield saveResult
 
         case start @ Some(s) =>
           for {
             snapshotToSave <- generateSnapshot(Snapshot.zero, eventStore.get(eventStreamKey(key), start), acc(key))
-            saveResult <- snapshotStore.put(key, snapshotToSave)
+            saveResult <- saveSnapshot(key, snapshotToSave)
           } yield saveResult
       }
+
+    /**
+     * Forces a save of the given snapshot. This can be used as a shortcut to refreshSnapshot if you already have the
+     * snapshot that you want to save.
+     * TODO - How should we best expose this functionality. Feels like a bit of a hack for optimisation.
+     * @param key The key
+     * @param snapshot Snapshot to save
+     * @return Error when saving snapshot or the snapshot that was saved.
+     */
+    final def saveSnapshot(key: K, snapshot: Snapshot[K, S, V]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
+      snapshotStore.put(key, snapshot)
+
   }
 }
