@@ -14,6 +14,7 @@ object Settings {
   , "-language:experimental.macros"
   , "-language:higherKinds"
   , "-language:implicitConversions"
+  , "-language:reflectiveCalls"
   , "-unchecked"
   , "-Xfatal-warnings"
 //  , "-Xlint" // commented out due to https://issues.scala-lang.org/browse/SI-8476

@@ -4,7 +4,7 @@ package dynamo
 import com.amazonaws.services.dynamodbv2.{ AmazonDynamoDBClient => DynamoClient }
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException
 
-import io.atlassian.aws.dynamodb.{ Column, Comparison, Decoder, DynamoDB, Encoder, Marshaller, Page, Query, StoreValue, TableDefinition, Unmarshaller }
+import io.atlassian.aws.dynamodb.{ Column, Comparison, Decoder, Encoder, Page, Table, TableDefinition, ValueUpdate }
 import io.atlassian.aws.OverwriteMode
 import kadai.{ Attempt, Invalid }
 import org.joda.time.DateTime
@@ -20,84 +20,45 @@ object DynamoEventSource {
   }
 }
 
-trait DynamoEventSource[K, V, S] extends EventSource[K, V, S] {
+trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
   import DynamoEventSource._
   import EventSource.Error
 
-  implicit def TransformOpEncode: Encoder[Transform.Op] =
-    Encoder[String].contramap { Transform.Op.apply }
-  implicit def TransformOpDecode: Decoder[Transform.Op] =
-    Decoder[String].flatMap {
-      case Transform.Op(op) => Decoder.ok(op)
-      case op               => Decoder.from { Attempt.fail(s"Invalid operation: $op") }
-    }
+  object table extends Table {
+    type K = EventId
+    type V = Event
+    type H = KK
+    type R = S
+  }
 
-  /**
-   * Pass in the marshallers and unmarshallers to turn our data into dynamo maps
-   */
-
-  // TODO - remove decoder and encoder for key and seq
-  case class Marshallers(
-    keyCol: Column[K],
-    seqCol: Column[S],
-    valueCol: Column[V],
-    encodeKey: Encoder[K],
-    encodeSeq: Encoder[S],
-    decodeKey: Decoder[K],
-    decodeSeq: Decoder[S],
-    decodeValue: Decoder[V],
-    marshallValue: Marshaller[V],
-    table: TableDefinition[EventId, Event])
-
-  abstract class DAO[F[_]](awsClient: DynamoClient, tableName: String, marshallers: Marshallers)(
+  abstract class DAO[F[_]](awsClient: DynamoClient, tableDef: TableDefinition[KK, VV, KK, S])(
     implicit M: Monad[F],
     C: Catchable[F],
+    interpret: table.DBAction ~> Task ,
     ToF: Task ~> F) extends Storage[F] {
 
+    object Columns {
+      implicit val transformOpDecoder: Decoder[Transform.Op] =
+        Decoder[String].mapPartial(Function.unlift(Transform.Op.unapply))
+      implicit val transformOpEncoder: Encoder[Transform.Op] =
+        Encoder[String].contramap(Transform.Op.apply)
+
+
+      val eventId = Column.compose2[EventId](tableDef.key, tableDef.range) { case EventId(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
+      val lastModified = Column[DateTime]("LastModifiedTimestamp")
+      val transform = Column.compose2[Transform[VV]](Column[Transform.Op]("Operation"), tableDef.value.liftOption) {
+        case Transform.Delete => (Transform.Op.Delete, None)
+        case Transform.Insert(v) => (Transform.Op.Insert, Some(v))
+      } {
+        case (Transform.Op.Insert, Some(v)) => Transform.Insert(v)
+        case (Transform.Op.Delete, None) => Transform.delete
+        //case _ => ??? // shouldn't happen
+      }
+
+      val event = Column.compose3[Event](eventId, lastModified, transform) { case Event(id, ts, tx) => (id, ts, tx) } { case (id, ts, tx) => Event(id, ts, tx) }
+    }
+
     import scalaz.syntax.monad._
-    implicit val keyCol: Column[K] = marshallers.keyCol
-    implicit val seqCol: Column[S] = marshallers.seqCol
-    implicit val valueCol: Column[V] = marshallers.valueCol
-    implicit val encodeKey: Encoder[K] = marshallers.encodeKey
-    implicit val decodeKey: Decoder[K] = marshallers.decodeKey
-    implicit val decodeSeq: Decoder[S] = marshallers.decodeSeq
-    implicit val encodeSeq: Encoder[S] = marshallers.encodeSeq
-    implicit val decodeValue: Decoder[V] = marshallers.decodeValue
-    implicit val marshallKey: Marshaller[K] = Marshaller.fromColumn(keyCol)
-    implicit val marshallSeq: Marshaller[S] = Marshaller.fromColumn(seqCol)
-    implicit val marshallValue: Marshaller[V] = marshallers.marshallValue
-
-    implicit val tableDef: TableDefinition[EventId, Event] = marshallers.table
-
-    implicit val marshallEventId: Marshaller[EventId] = Marshaller.fromColumn2[K, S, EventId](keyCol, seqCol) {
-      case EventId(k, sequence) => (k, sequence)
-    }
-
-    val lastModified = Column[DateTime]("LastModifiedTimestamp")
-    val operation = Column[Transform.Op]("Operation")
-    implicit val marshallEvent = Marshaller.from[Event] {
-      case Event(EventId(k, sequence), time, op) =>
-        Map(lastModified(time)) ++ {
-          op match {
-            case Transform.Insert(v) => marshallValue.toMap(v) ++ Marshaller.fromColumn(operation).toMap(Transform.Op.Insert)
-            case Transform.Delete    => Marshaller.fromColumn(operation).toMap(Transform.Op.Delete)
-          }
-        }
-    }
-
-    implicit val unmarshallEvent =
-      Unmarshaller.from[Event](
-        for {
-          lastModified <- lastModified.get
-          op <- operation.get
-          key <- keyCol.get
-          seq <- seqCol.get
-          tx <- op match {
-            case Transform.Op.Insert => valueCol.get.flatMap { m => Unmarshaller.Operation.ok(Transform.Insert(m)) }
-            case Transform.Op.Delete => Unmarshaller.Operation.ok[Transform[V]](Transform.Delete)
-          }
-        } yield Event(EventId(key, seq), lastModified, tx)
-      )
 
     /**
      * To return a stream of events from Dynamo, we first need to execute a query, then emit results, and then optionally
@@ -106,29 +67,29 @@ trait DynamoEventSource[K, V, S] extends EventSource[K, V, S] {
      * @param key The key
      * @return Stream of events.
      */
-    override def get(key: K, fromSeq: Option[S]): Process[F, Event] = {
+    override def get(key: KK, fromSeq: Option[S]): Process[F, Event] = {
 
       import Process._
 
-      def requestPage(q: Query[Event]): Task[Page[Event]] = {
+      def requestPage(q: table.Query): Task[Page[table.R, Event]] = {
         Task.suspend {
-          DynamoDB.query(q).run(awsClient).run.fold(i => Task.fail(toThrowable(i)), Task.now)
+          interpret(table.query(q))
         }
       }
 
-      def loop(pt: Task[Page[Event]]): Process[Task, Event] =
+      def loop(pt: Task[Page[table.R, Event]]): Process[Task, Event] =
         await(pt) { page =>
           emitAll(page.result) ++ {
-            page.next.fold(halt: Process[Task, Event])(nextQuery => loop(requestPage(nextQuery)))
+            page.next.fold(halt: Process[Task, Event]) { seq => loop(requestPage(table.Query.range(key, seq, Comparison.Gte))) }
           }
         }
 
       loop {
         requestPage {
           fromSeq.fold {
-            Query.forHash[K, EventId, Event](key)
+            table.Query.hash(key)
           } {
-            seq => Query.forHashAndRange[K, S, EventId, Event](key, seq, Comparison.Gte)
+            seq => table.Query.range(key, seq, Comparison.Gte)
           }
         }
       }.translate(ToF)
@@ -144,7 +105,7 @@ trait DynamoEventSource[K, V, S] extends EventSource[K, V, S] {
      */
     override def put(event: Event): F[Error \/ Event] =
       for {
-        putResult <- DynamoDB.put[EventId, Event](event.id, event, OverwriteMode.NoOverwrite).map { _ => event }.run(awsClient).run.point[F]
+        putResult <- ToF { interpret(table.put(event.id, event)) }
 
         r <- putResult match {
           case \/-(c) => c.right.point[F]
@@ -153,8 +114,8 @@ trait DynamoEventSource[K, V, S] extends EventSource[K, V, S] {
         }
       } yield r
 
-    implicit val EventDynamoValue: StoreValue[Event] =
-      StoreValue.withUpdated {
+    val EventDynamoValue: ValueUpdate[Event] =
+      ValueUpdate.withUpdated {
         (_, a) => StoreValue.newFromValues(a)
       }
   }
