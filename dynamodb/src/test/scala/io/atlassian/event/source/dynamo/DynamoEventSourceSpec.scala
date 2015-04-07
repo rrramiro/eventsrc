@@ -1,4 +1,5 @@
-package io.atlassian.eventsrc
+package io.atlassian.event
+package source
 package dynamo
 
 import org.junit.runner.RunWith
@@ -10,7 +11,7 @@ import scalaz.concurrent.Task
 import org.scalacheck.Prop
 import org.joda.time.DateTime
 import scalaz._
-import io.atlassian.eventsrc.EventSource.Error.DuplicateEvent
+import EventSource.Error.DuplicateEvent
 
 @RunWith(classOf[org.specs2.runner.JUnitRunner])
 class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec with LocalDynamoDBSpec {

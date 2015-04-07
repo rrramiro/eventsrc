@@ -1,4 +1,5 @@
-package io.atlassian.eventsrc
+package io.atlassian.event
+package source
 
 import org.joda.time.DateTime
 
@@ -24,8 +25,9 @@ import scalaz.syntax.std.option._
  *       - Records are keyed against a hash key (typically a unique identifier of business value) and a numeric range key
  *       - querying for a given hash key
  *       - conditional saves against a given hash and range key to prevent overwriting of a given record.
+ *
+ *  TODO - make EventSource sit on top of EventStream
  */
-
 object EventSource {
   sealed trait Result[A]
   object Result {
@@ -102,7 +104,7 @@ trait EventSource[K, V, S] {
    *
    * This is only used internally within an event source.
    */
-  private[eventsrc] sealed trait Snapshot {
+  private[source] sealed trait Snapshot {
     import Snapshot._
     def value: Option[V]
     def id: Option[EventId] =
@@ -116,7 +118,7 @@ trait EventSource[K, V, S] {
       }
   }
 
-  private[eventsrc] object Snapshot {
+  private[source] object Snapshot {
     /**
      * There is no snapshot... i.e. no events have been saved.
      */
@@ -263,7 +265,7 @@ trait EventSource[K, V, S] {
      * @param pred Predicate for filtering events.
      * @return View of the data obtained from applying all events in the stream up until the given condition is not met.
      */
-    private[eventsrc] def getWhile(key: K)(pred: Event => Boolean): F[Option[V]] =
+    private[source] def getWhile(key: K)(pred: Event => Boolean): F[Option[V]] =
       M(extractSnapshot(store.get(key).takeWhile(pred))) { _.value }
 
     /**

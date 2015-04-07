@@ -1,4 +1,4 @@
-package io.atlassian.eventsrc
+package io.atlassian.event
 
 import scalaz.Order
 import scalaz.Ordering

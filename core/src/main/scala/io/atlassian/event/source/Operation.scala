@@ -1,4 +1,5 @@
-package io.atlassian.eventsrc
+package io.atlassian.event
+package source
 
 import scalaz.{ Functor, \/, Equal, NonEmptyList }
 import scalaz.syntax.equal._
