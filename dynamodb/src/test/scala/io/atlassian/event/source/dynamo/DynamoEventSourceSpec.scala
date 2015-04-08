@@ -64,9 +64,9 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
     This is a specification to check the DynamoDB event source for blob mappings
 
     DynamoEventSource.Events should                   ${Step(startLocalDynamoDB)} ${Step(createTestTable)}
-       correctly put an event                            {putEventWorks.set(minTestsOk = NUM_TESTS)}
-       return error when saving a duplicate event        {eventReturnsErrorForDuplicateEvent.set(minTestsOk = NUM_TESTS)}
-       return the correct number of events (no paging)   {nonPagingGetWorks.set(minTestsOk = NUM_TESTS)}
+       correctly put an event                            ${putEventWorks.set(minTestsOk = NUM_TESTS)}
+       return error when saving a duplicate event        ${eventReturnsErrorForDuplicateEvent.set(minTestsOk = NUM_TESTS)}
+       return the correct number of events (no paging)   ${nonPagingGetWorks.set(minTestsOk = NUM_TESTS)}
        return the correct number of events (with paging) ${if (IS_LOCAL) pagingGetWorks.set(minTestsOk = 1) else skipped("SKIPPED - not run in AWS integration mode because it is slow")}
 
                                                   ${Step(deleteTestTable)}
