@@ -2,6 +2,7 @@ package io.atlassian.event
 package source
 package dynamo
 
+import io.atlassian.aws.WrappedInvalidException
 import org.junit.runner.RunWith
 import org.specs2.main.Arguments
 import io.atlassian.aws.dynamodb._
@@ -9,12 +10,12 @@ import org.specs2.specification.Step
 import scalaz.std.anyVal._
 import scalaz.concurrent.Task
 import org.scalacheck.Prop
-import org.joda.time.DateTime
+import org.joda.time.{DateTimeZone, DateTime}
 import scalaz._
 import EventSource.Error.DuplicateEvent
 
 @RunWith(classOf[org.specs2.runner.JUnitRunner])
-class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec with LocalDynamoDBSpec {
+class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec with LocalDynamoDB with DynamoDBActionMatchers {
 
   object DBEventSource extends DynamoEventSource[String, String, Long] with LongSequencedEventSource[String, String] {
     val tableName = s"DynamodbEventSourceSpec_${System.currentTimeMillis}"
@@ -23,43 +24,35 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
     val key = Column[String]("key")
     val seq = Column[Long]("seq")
     val value = Column[String]("value")
-    val marshallValue: Marshaller[String] =
-      Marshaller.fromColumn[String](value)
 
-    lazy val eventStore = new DAO[Task](dynamoClient, tableName, new Marshallers(
-      key,
-      seq,
-      value,
-      Encoder[String],
-      Encoder[Long],
-      Decoder[String],
-      Decoder[Long],
-      Decoder[String],
-      marshallValue,
-      tableMapping
-    )) {}
+    lazy val tableDefinition =
+      TableDefinition.from[String, String, String, Long](tableName, key, value, key, seq)
+
+    class MyDAO extends DAO[Task](dynamoClient, tableDefinition)
 
     class DBEventStoreAPI[F[_]](val store: Storage[F])(implicit val M: Monad[F], val C: Catchable[F]) extends API[F]
 
+    lazy val eventStore = new MyDAO
+
     lazy val eventSourceApi = new DBEventStoreAPI[Task](eventStore)
-
-    implicit def EventEqual: Equal[Event] = Equal.equal { (a, b) =>
-      a.id == b.id && implicitly[Equal[DateTime]].equal(a.time, b.time) &&
-        a.operation == b.operation
-    }
-
-    lazy val tableMapping =
-      TableDefinition.from[EventId, Event](tableName, key.name, Some(AttributeDefinition.number(seq.name)))
-
-    def createTestTable() =
-      createTable[EventId, Event](tableMapping, dynamoClient)
-
-    def deleteTestTable() =
-      deleteTable[EventId, Event](tableMapping, dynamoClient)
   }
 
   import DBEventSource._
   import Operation.syntax._
+
+  implicit lazy val runner: DynamoDBAction ~> Task =
+    new (DynamoDBAction ~> Task) {
+      def apply[A](a: DynamoDBAction[A]): Task[A] =
+        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException(i)) }, { a => Task.now(a) })
+    }
+
+  implicit val JodaDateTimeEqual: Equal[DateTime] =
+    Equal.equalBy { _.withZone(DateTimeZone.UTC).toInstant.getMillis }
+
+  implicit val EventEqual: Equal[Event] = Equal.equal { (a, b) =>
+    a.id == b.id && implicitly[Equal[DateTime]].equal(a.time, b.time) &&
+      a.operation == b.operation
+  }
 
   implicit val DYNAMO_CLIENT = dynamoClient
 
@@ -71,15 +64,18 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
     This is a specification to check the DynamoDB event source for blob mappings
 
     DynamoEventSource.Events should                   ${Step(startLocalDynamoDB)} ${Step(createTestTable)}
-       correctly put an event                            ${putEventWorks.set(minTestsOk = NUM_TESTS)}
-       return error when saving a duplicate event        ${eventReturnsErrorForDuplicateEvent.set(minTestsOk = NUM_TESTS)}
-       return the correct number of events (no paging)   ${nonPagingGetWorks.set(minTestsOk = NUM_TESTS)}
+       correctly put an event                            {putEventWorks.set(minTestsOk = NUM_TESTS)}
+       return error when saving a duplicate event        {eventReturnsErrorForDuplicateEvent.set(minTestsOk = NUM_TESTS)}
+       return the correct number of events (no paging)   {nonPagingGetWorks.set(minTestsOk = NUM_TESTS)}
        return the correct number of events (with paging) ${if (IS_LOCAL) pagingGetWorks.set(minTestsOk = 1) else skipped("SKIPPED - not run in AWS integration mode because it is slow")}
+
+                                                  ${Step(deleteTestTable)}
+                                                  ${Step(stopLocalDynamoDB)}
 
   """
 
   def pagingGetWorks =
-    Prop.forAll { (nonEmptyKey: UniqueString, v: String) =>
+    Prop.forAll { (nonEmptyKey: UniqueString) =>
       // Generate a really long hash to max out item size
       val str = (1 to 12000).toList.map { _ => 'a' }.mkString
       val key = nonEmptyKey.unwrap
@@ -123,7 +119,7 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
       val eventId = EventId.first(nonEmptyKey.unwrap)
       val event = Event(eventId, DateTime.now, Transform.Insert(value))
       eventStore.put(event).run
-      DynamoDB.get[EventId, Event](eventId) must returnValue(Some(event))
+      DynamoDB.get[EventId, Event](eventId)(tableName, Columns.eventId, Columns.event) must returnValue(Some(event))
     }
 
   def eventReturnsErrorForDuplicateEvent =
@@ -138,4 +134,10 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
         case _           => ko
       }
     }
+
+  def createTestTable() =
+    DynamoDBOps.createTable(tableDefinition)
+
+  def deleteTestTable() =
+    DynamoDBOps.deleteTable(tableDefinition)
 }
