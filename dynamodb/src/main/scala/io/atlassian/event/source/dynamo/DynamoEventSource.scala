@@ -26,7 +26,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
     implicit M: Monad[F],
     C: Catchable[F],
     runAction: DynamoDBAction ~> Task,
-    ToF: Task ~> F, decoderKK: Decoder[KK], decoderS: Decoder[S]) extends Storage[F] {
+    ToF: Task ~> F) extends Storage[F] {
 
     object Columns {
       implicit val transformOpDecoder: Decoder[Transform.Op] =
@@ -58,7 +58,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
     val interpret: table.DBAction ~> Task =
       runAction compose
         table.transform(DynamoDB.interpreter(table)(
-          TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)))
+          TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)(tableDef.hash.decoder, tableDef.range.decoder)))
 
     import scalaz.syntax.monad._
 
