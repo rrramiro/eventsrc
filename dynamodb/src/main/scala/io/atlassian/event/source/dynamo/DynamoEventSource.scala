@@ -35,7 +35,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
         Encoder[String].contramap(Transform.Op.apply)
 
 
-      val eventId = Column.compose2[EventId](tableDef.key, tableDef.range) { case EventId(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
+      val eventId = Column.compose2[EventId](tableDef.hash, tableDef.range) { case EventId(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
       val lastModified = Column[DateTime]("LastModifiedTimestamp")
       val transform = Column.compose2[Transform[VV]](Column[Transform.Op]("Operation"), tableDef.value.liftOption) {
         case Transform.Delete => (Transform.Op.Delete, None)
