@@ -1,19 +1,17 @@
 package io.atlassian.event
 package stream
 
-import org.joda.time.DateTime
+import io.atlassian.event.stream.EventStream.QueryConsistency
 import org.scalacheck.{ Gen, Arbitrary, Prop }
 import org.specs2.{ ScalaCheck, SpecificationWithJUnit }
 
-import scalaz.{ Catchable, Monad, \/ }
+import scalaz.\/
 import scalaz.concurrent.Task
-import scalaz.stream.Process
 import scalaz.syntax.either._
-import scalaz.syntax.nel._
 import Arbitrary.arbitrary
-import Operation.Result
 
 class DirectoryEventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
+
   import DirectoryEventStream._
   import Operation.syntax._
 
@@ -41,11 +39,12 @@ class DirectoryEventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
   def addMultipleUsers = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
     u1.username != u2.username ==> {
       val eventStream = new DirectoryEventStream(1)
-      val api = new eventStream.AllUsersAPI
+      val api = new eventStream.AllUsersQueryAPI
+      val saveApi = new eventStream.AllUsersSaveAPI(api)
 
       (for {
-        _ <- api.save(k, addUniqueUser(eventStream)(u1))
-        _ <- api.save(k, addUniqueUser(eventStream)(u2))
+        _ <- saveApi.save(k, addUniqueUser(eventStream)(u1))
+        _ <- saveApi.save(k, addUniqueUser(eventStream)(u2))
         allUsers <- api.get(k)
       } yield allUsers).run.get must containTheSameElementsAs(List(u2, u1))
     }
@@ -53,107 +52,85 @@ class DirectoryEventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
 
   def duplicateUsername = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
     val eventStream = new DirectoryEventStream(1)
-    val api = new eventStream.AllUsersAPI
+    val api = new eventStream.AllUsersQueryAPI
+    testDuplicateUsername(eventStream)(api)(k, u1, u2)
+  }
 
-    val user2ToSave = u2.copy(username = u1.username)
-    (for {
-      _ <- api.save(k, addUniqueUser(eventStream)(u1))
-      _ <- api.save(k, addUniqueUser(eventStream)(user2ToSave))
-      allUsers <- api.get(k)
-    } yield allUsers).run.get must containTheSameElementsAs(List(u1))
+  def duplicateUsernameWithSnapshot = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
+    val eventStream = new DirectoryEventStream(1)
+    val api = new eventStream.AllUsersQueryAPIWithSnapshotPersistence
+    testDuplicateUsername(eventStream)(api)(k, u1, u2)
   }
 
   def addMultipleUsersWithSnapshot = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
     u1.username != u2.username ==> {
       val eventStream = new DirectoryEventStream(1)
-      val api = new eventStream.AllUsersAPI
+      val api = new eventStream.AllUsersQueryAPIWithSnapshotPersistence
+      val saveApi = new eventStream.AllUsersSaveAPI(api)
 
       val (allUsers, snapshotUser1, snapshotUser2) = (for {
-        _ <- api.save(k, addUniqueUser(eventStream)(u1))
-        snapshotUser1 <- api.refreshSnapshot(k, None)
-        savedUser2 <- api.save(k, addUniqueUser(eventStream)(u2))
+        _ <- saveApi.save(k, addUniqueUser(eventStream)(u1))
+        snapshotUser1 <- api.get(k, QueryConsistency.LatestSnapshot)
+        savedUser2 <- saveApi.save(k, addUniqueUser(eventStream)(u2))
         seq = savedUser2.fold(_.seq, _ => None, None)
-        snapshotUser2 <- api.refreshSnapshot(k, None)
+        snapshotUser2 <- api.get(k, QueryConsistency.LatestSnapshot)
         allUsers <- api.get(k)
       } yield (allUsers, snapshotUser1, snapshotUser2)).run
 
       allUsers.get must containTheSameElementsAs(List(u2, u1)) and
-        (snapshotUser1.toOption.get.value === Some(List(u1))) and
-        (snapshotUser2.toOption.get.value.get must containTheSameElementsAs(List(u2, u1)))
+        (snapshotUser1 === Some(List(u1))) and
+        (snapshotUser2.get must containTheSameElementsAs(List(u2, u1)))
     }
   }
 
-  def duplicateUsernameWithSnapshot = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
-    val eventStream = new DirectoryEventStream(1)
-    val api = new eventStream.AllUsersAPI
+  private def testDuplicateUsername(e: DirectoryEventStream)
+                                   (queryApi: e.QueryAPI[DirectoryId, List[User]])
+                                   (k: DirectoryId, u1: User, u2: User) = {
+    val saveApi = new e.AllUsersSaveAPI(queryApi)
 
     val user2ToSave = u2.copy(username = u1.username)
     (for {
-      _ <- api.save(k, addUniqueUser(eventStream)(u1))
-      _ <- api.snapshotStore.put(k, Snapshot.value(List(u1), eventStream.S.first, DateTime.now))
-      _ <- api.save(k, addUniqueUser(eventStream)(user2ToSave))
-      allUsers <- api.get(k)
+      _ <- saveApi.save(k, addUniqueUser(e)(u1))
+      _ <- saveApi.save(k, addUniqueUser(e)(user2ToSave))
+      allUsers <- queryApi.get(k)
     } yield allUsers).run.get must containTheSameElementsAs(List(u1))
   }
 
   def duplicateUsernameSharded = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
     val events = new DirectoryEventStream(1)
-    val api1 = new events.AllUsersAPI
-    val api2 = new events.ShardedUsernameAPI
-
-    val user2ToSave = u2.copy(username = u1.username)
-
-    // Do the saving operation. This is kind of ugly but supports multiple conditions
-    def saveUser(u: User) =
-      for {
-        s <- api2.getSnapshot((k, u.username))
-        op <- s.fold(
-          Task.now(Operation[api2.K, events.S, api2.V, events.E] { _ => Result.success[events.E](AddUser(u)) }),
-          (_, _, _) => Task.fail(new Exception("Duplicate username")),
-          (id, _) => Task.now {
-            Operation[api2.K, events.S, api2.V, events.E] {
-              s2 =>
-                if (s.seq == s2.seq) Result.success[events.E](AddUser(u))
-                else Result.reject(Reason("Locking exception").wrapNel)
-            }
-          }
-        )
-        _ <- api2.save((k, u.username), op)
-      } yield ()
-
-    saveUser(u1).attemptRun
-    saveUser(user2ToSave).run must throwA[Exception] and
-      (api1.get(k).run.get must containTheSameElementsAs(List(u1)))
+    val api = new events.ShardedUsernameQueryAPI
+    testDuplicateUsernameSharded(events)(api)(k, u1, u2)
   }
 
   def duplicateUsernameShardedWithSnapshot = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
     val events = new DirectoryEventStream(1)
-    val api1 = new events.AllUsersAPI
-    val api2 = new events.ShardedUsernameAPI
+    val api = new events.ShardedUsernameQueryAPIWithSnapshotPersistence
+    testDuplicateUsernameSharded(events)(api)(k, u1, u2)
+  }
+
+  def testDuplicateUsernameSharded(e: DirectoryEventStream)
+                                  (queryApi: e.QueryAPI[DirectoryUsername, UserId])
+                                  (k: DirectoryId, u1: User, u2: User) = {
+    val api1 = new e.AllUsersQueryAPI
+    val saveApi = new e.SaveAPI[DirectoryUsername, UserId](queryApi)
 
     val user2ToSave = u2.copy(username = u1.username)
 
     // Do the saving operation. This is kind of ugly but supports multiple conditions
     def saveUser(u: User) =
       for {
-        s <- api2.getSnapshot((k, u.username))
+        s <- queryApi.getSnapshot((k, u.username))
         op <- s.fold(
-          Task.now(Operation[api2.K, events.S, api2.V, events.E] { _ => Result.success(AddUser(u)) }),
+          Task.now(Operation.insert[queryApi.K, e.S, queryApi.V, e.E](AddUser(u))),
           (_, _, _) => Task.fail(new Exception("Duplicate username")),
           (id, _) => Task.now {
-            Operation[api2.K, events.S, api2.V, events.E] {
-              s2 =>
-                if (s.seq == s2.seq) Result.success(AddUser(u))
-                else Result.reject(Reason("Locking exception").wrapNel)
-            }
+            Operation.ifSeq[queryApi.K, e.S, queryApi.V, e.E](id, AddUser(u))
           }
         )
-        _ <- api2.save((k, u.username), op)
+        _ <- saveApi.save((k, u.username), op)
       } yield ()
 
     saveUser(u1).attemptRun
-    // Manually save a snapshot
-    api2.snapshotStore.put((k, u1.username), Snapshot.value(u1.id, events.S.first, DateTime.now)).run
     saveUser(user2ToSave).run must throwA[Exception] and
       (api1.get(k).run.get must containTheSameElementsAs(List(u1)))
   }
@@ -202,7 +179,7 @@ class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
 
   val eventStore = new MemoryEventStorage[KK, S, E]
 
-  class ShardedUsernameAPI extends API[DirectoryUsername, UserId] {
+  class ShardedUsernameQueryAPI extends QueryAPI[DirectoryUsername, UserId] {
     override def eventStreamKey = _._1
 
     override def acc(key: DirectoryUsername)(v: Snapshot[DirectoryUsername, S, UserId], e: Event[KK, S, E]): Snapshot[DirectoryUsername, S, UserId] =
@@ -249,7 +226,12 @@ class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
     }
   }
 
-  class AllUsersAPI extends API[DirectoryId, List[User]] {
+  class ShardedUsernameQueryAPIWithSnapshotPersistence extends ShardedUsernameQueryAPI {
+    override val runPersistSnapshot: Task[SnapshotStorage.Error \/ Snapshot[K, S, V]] => Unit =
+      _.run.fold(println(_), _ => ())
+  }
+
+  class AllUsersQueryAPI extends QueryAPI[DirectoryId, List[User]] {
     override def eventStreamKey = k => k
 
     override def acc(key: DirectoryId)(v: Snapshot[DirectoryId, S, List[User]], e: Event[KK, S, E]): Snapshot[DirectoryId, S, List[User]] =
@@ -261,19 +243,28 @@ class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
           Snapshot.Value(userList, e.id.seq, e.time)
       }
 
-    object snapshotStore extends SnapshotStorage[Task, DirectoryId, S, List[User]] {
-      val map = collection.concurrent.TrieMap[DirectoryId, Snapshot[DirectoryId, S, List[User]]]()
-
-      def get(key: DirectoryId, sequence: SequenceQuery[TwoPartSequence]): Task[Snapshot[DirectoryId, S, List[User]]] =
-        Task {
-          map.getOrElse(key, Snapshot.zero)
-        }
-
-      def put(key: DirectoryId, view: Snapshot[DirectoryId, S, List[User]]): Task[SnapshotStorage.Error \/ Snapshot[DirectoryId, S, List[User]]] =
-        Task {
-          map += (key -> view)
-          view.right
-        }
-    }
+    val snapshotStore = DirectoryIdListUserSnapshotStorage
   }
+
+  class AllUsersQueryAPIWithSnapshotPersistence extends AllUsersQueryAPI {
+    override val runPersistSnapshot: Task[SnapshotStorage.Error \/ Snapshot[K, S, V]] => Unit =
+      _.run.fold(e => throw new RuntimeException(e.toString), _ => ())
+  }
+
+  object DirectoryIdListUserSnapshotStorage extends SnapshotStorage[Task, DirectoryId, S, List[User]] {
+    val map = collection.concurrent.TrieMap[DirectoryId, Snapshot[DirectoryId, S, List[User]]]()
+
+    def get(key: DirectoryId, sequence: SequenceQuery[TwoPartSequence]): Task[Snapshot[DirectoryId, S, List[User]]] =
+      Task {
+        map.getOrElse(key, Snapshot.zero)
+      }
+
+    def put(key: DirectoryId, view: Snapshot[DirectoryId, S, List[User]]): Task[SnapshotStorage.Error \/ Snapshot[DirectoryId, S, List[User]]] =
+      Task {
+        map += (key -> view)
+        view.right
+      }
+  }
+
+  class AllUsersSaveAPI(query: QueryAPI[DirectoryId, List[User]]) extends SaveAPI[DirectoryId, List[User]](query)
 }

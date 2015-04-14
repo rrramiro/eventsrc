@@ -2,6 +2,7 @@ package io.atlassian.event
 package stream
 
 import scalaz.NonEmptyList
+import scalaz.syntax.nel._
 
 /**
  * Wraps an operation to save an event to an event stream. Saving to an event stream is through an API, which is tied
@@ -31,9 +32,14 @@ case class Operation[K, S, V, E](run: Snapshot[K, S, V] => Operation.Result[E]) 
 }
 
 object Operation {
-
   def insert[K, S, V, E](e: E): Operation[K, S, V, E] =
     Operation { _ => Result.success(e) }
+
+  def ifSeq[K, S, V, E](seq: S, e: E): Operation[K, S, V, E] =
+    Operation { snapshot =>
+      if (snapshot.seq == seq) Result.success(e)
+      else Result.reject(Reason(s"Mismatched event stream sequence number: ${snapshot.seq} does not match expected $seq").wrapNel)
+    }
 
   object syntax {
     implicit class ToOperationOps[E](val self: E) {

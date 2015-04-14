@@ -5,9 +5,8 @@ import org.joda.time.DateTime
 
 import scalaz._
 import scalaz.stream.{ process1, Process }
-import scalaz.syntax.either._
-import scalaz.syntax.monad._
-import scalaz.syntax.std.boolean._
+import scalaz.syntax.all._
+import scalaz.syntax.std.option._
 
 object EventStream {
   /**
@@ -70,9 +69,13 @@ abstract class EventStream[F[_]: Monad: Catchable] {
   protected def eventStore: EventStorage[F, KK, S, E]
 
   /**
-   * Query API supports get by key. Internally it'll have an option to refresh a snapshot
-   * @tparam Key
-   * @tparam Val
+   * QueryAPI provides the main API for consumers to query an event source. It is a basic key-value store.
+   * Consumers can query by a `Key` type that needs to be transformable to the underlying event stream's `K` key type.
+   * Implementations contain logic for calculating a snapshot given a series of events, key transform, and
+   * override `runPersistSnapshot` to control how snapshots are persisted.
+   * 
+   * @tparam Key type for the aggregate (may be different from the key for the event stream)
+   * @tparam Val Aggregate type
    */
   trait QueryAPI[Key, Val] {
     type K = Key
@@ -86,13 +89,18 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      * @param e Event to add to previous view
      * @return New view with event added.
      */
-    protected def acc(key: K)(v: Snapshot[K, S, V], e: Event[KK, S, E]): Snapshot[K, S, V]
+    private[stream] def acc(key: K)(v: Snapshot[K, S, V], e: Event[KK, S, E]): Snapshot[K, S, V]
 
     /**
      * Transform a given aggregate key to the key for the underlying event stream
      */
-    protected def eventStreamKey: K => KK
+    private[stream] def eventStreamKey: K => KK
 
+    /**
+     * Wraps output from `generateLatestSnapshot` which is both the latest snapshot and what was previously persisted.
+     */
+    protected case class LatestSnapshotResult(latest: Snapshot[K, S, V], previousPersisted: Snapshot[K, S, V])
+    
     /**
      * Return the current view of the data for key 'key'
      */
@@ -100,34 +108,27 @@ abstract class EventStream[F[_]: Monad: Catchable] {
       getSnapshot(key, consistency).map { _.value }
 
     /**
-     * @return the current view wrapped in Snashot of the data for key 'key'
+     * @return the current view wrapped in Snapshot of the data for key 'key'
      */
     final def getSnapshot(key: K, consistency: QueryConsistency = QueryConsistency.LatestEvent): F[Snapshot[K, S, V]] =
       consistency.fold(
         snapshotStore.get(key, SequenceQuery.latest[S]),
-        doSomethingWithPersistSnapshotOp(key)
+        for {
+          latestSnapshot <- generateLatestSnapshot(key)
+          _ = persistSnapshot(key, latestSnapshot.latest, latestSnapshot.previousPersisted.some)
+        } yield latestSnapshot.latest
       )
 
-    protected def doSomethingWithPersistSnapshotOp(key: K): F[Snapshot[K, S, V]] =
-      for {
-        latestEventSnapshot <- generateLatestSnapshot(key)
-        (snapshot, saveSnapshotOp) = latestEventSnapshot
-        _ <- saveSnapshotOp
-      } yield snapshot
-
-    // generate latest snapshot provides a snapshot and an F that if you run it will save the snapshot.
-    private def generateLatestSnapshot(key: K): F[(Snapshot[K, S, V], F[SnapshotStorage.Error \/ Snapshot[K, S, V]])] =
+    /**
+     * Generates the latest snapshot by retrieving the last persisted snapshot and then replaying events on top of that.
+     */
+    private[stream] final def generateLatestSnapshot(key: K): F[LatestSnapshotResult] =
       for {
         persistedSnapshot <- snapshotStore.get(key, SequenceQuery.latest[S])
         fromSeq = persistedSnapshot.seq
         events = eventStore.get(eventStreamKey(key), fromSeq)
-        theSnapshot <- generateSnapshot(persistedSnapshot, events, acc(key))
-        persistSnapshotOp =
-          if (theSnapshot.seq != persistedSnapshot.seq)
-            saveSnapshot(key, theSnapshot)
-          else
-            theSnapshot.right[SnapshotStorage.Error].point[F]
-      } yield (theSnapshot, persistSnapshotOp)
+        theSnapshot <- snapshotFold(persistedSnapshot, events, acc(key))
+      } yield LatestSnapshotResult(theSnapshot, persistedSnapshot)
 
     /**
      * @param key The key of the aggregate to retrieve
@@ -140,7 +141,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
         fromSeq = persistedSnapshot.seq
         pred = at.fold[Event[KK, S, E] => Boolean] { _ => true } { seq => e => S.order.lessThanOrEqual(e.id.seq, seq) }
         events = eventStore.get(eventStreamKey(key), fromSeq).takeWhile(pred)
-        theSnapshot <- generateSnapshot(persistedSnapshot, events, acc(key))
+        theSnapshot <- snapshotFold(persistedSnapshot, events, acc(key))
       } yield theSnapshot
 
     /**
@@ -178,7 +179,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
       // We need to get the earliest snapshot, then the stream of events from that snapshot
       for {
         earliestSnapshot <- snapshotStore.get(key, SequenceQuery.earliest[S])
-        value <- generateSnapshot(earliestSnapshot, eventStore.get(eventStreamKey(key), earliestSnapshot.seq).takeWhile { _.time <= time }, acc(key)).map { _.value }
+        value <- snapshotFold(earliestSnapshot, eventStore.get(eventStreamKey(key), earliestSnapshot.seq).takeWhile { _.time <= time }, acc(key)).map { _.value }
       } yield value
     }
 
@@ -187,212 +188,76 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      * @param events The stream of events.
      * @return Container F that when executed provides the snapshot.
      */
-    private def generateSnapshot(start: Snapshot[K, S, V],
-                                 events: Process[F, Event[KK, S, E]],
-                                 f: (Snapshot[K, S, V], Event[KK, S, E]) => Snapshot[K, S, V]): F[Snapshot[K, S, V]] =
+    private def snapshotFold(start: Snapshot[K, S, V],
+                             events: Process[F, Event[KK, S, E]],
+                             f: (Snapshot[K, S, V], Event[KK, S, E]) => Snapshot[K, S, V]): F[Snapshot[K, S, V]] =
       events.pipe {
         process1.fold(start)(f)
       }.runLastOr(start)
 
     /**
-     * Updates stored snapshot that this API wraps.
-     * either lazily (i.e. on read) or eagerly (i.e. when we save a new event).
+     * Explicitly refresh persisted snapshot with events starting at `forceStartAt`. Normally to refresh a snapshot,
+     * your implementation of QueryAPI can do so asynchronously via a custom `onGenerateLatestSnapshot` function.
+     *
+     * WARNING - Use this only if you know that events prior to `forceStartAt` can be safely ignored. Typically this is
+     * when a single event stream contains events for multiple entities, so obviously when you create a new entity, you
+     * can ignore all events prior to that creation event.
+     *
      * @param key The key
-     * @param forceStartAt If present, this will regenerate a snapshot starting from events at the specified sequence number.
+     * @param forceStartAt Generate a snapshot starting from events at the specified sequence number.
      *                     This should only be used when it is known that preceding events can be ignored. For example
      *                     when new entities are added, there are no views of those entities before the events that add
      *                     them!
      * @return Error when saving snapshot or the snapshot that was saved.
      */
-    private[stream] final def refreshSnapshot(key: K, forceStartAt: Option[S]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
-      forceStartAt match {
-        case None =>
-          for {
-            latestStored <- snapshotStore.get(key, SequenceQuery.latest)
-            events = eventStore.get(eventStreamKey(key), latestStored.seq)
-            latestSnapshot <- generateSnapshot(latestStored, events, acc(key))
-            saveResult <-
-            if (latestSnapshot.seq != latestStored.seq)
-              saveSnapshot(key, latestSnapshot)
-            else
-              latestSnapshot.right[SnapshotStorage.Error].point[F]
-          } yield saveResult
-
-        case start @ Some(s) =>
-          for {
-            snapshotToSave <- generateSnapshot(Snapshot.zero, eventStore.get(eventStreamKey(key), start), acc(key))
-            saveResult <- saveSnapshot(key, snapshotToSave)
-          } yield saveResult
-      }
-
-    protected final def saveSnapshot(key: K, snapshot: Snapshot[K, S, V]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
-      snapshotStore.put(key, snapshot)
-  }
-
-  /**
-   * Save API adds save to query. It can also take in a list of query APIs that need to be eagerly refreshed?
-   * Should save eagerly refresh its snapshot? This means that we need to enforce a type? We can add that as an explicit
-   * implementation on top of SaveAPI (Eager refreshing SaveAPI).
-   * @tparam Key
-   * @tparam Val
-   */
-  trait SaveAPI[Key, Val] extends QueryAPI[Key, Val] {
-    def save(key: K, operation: Operation[K, S, V, E]): F[SaveResult[K, S, V]] =
+    final def forceRefreshPersistedSnapshot(key: K, forceStartAt: S): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
       for {
-        old <- getSnapshot(key)
-        op = operation.run(old)
-        result <- op.fold(
-          Error.noop.left[Event[KK, S, E]].point[F],
-          Error.reject(_).left[Event[KK, S, E]].point[F],
-          e => eventStore.put(Event.next[KK, S, E](eventStreamKey(key), old.seq, e))
-        )
-        transform <- result match {
-          case -\/(Error.DuplicateEvent) =>
-            save(key, operation)
-          case -\/(Error.Noop) =>
-            SaveResult.noop[K, S, V]().point[F]
-          case -\/(Error.Rejected(r)) =>
-            SaveResult.reject[K, S, V](r).point[F]
-          case \/-(event) =>
-            SaveResult.success[K, S, V](acc(key)(old, event)).point[F]
-        }
-      } yield transform
+        snapshotToSave <- snapshotFold(Snapshot.zero, eventStore.get(eventStreamKey(key), Some(forceStartAt)), acc(key))
+        saveResult <- persistSnapshotOp(key, snapshotToSave, None)
+      } yield saveResult
+
+    private final def persistSnapshotOp(key: K, snapshot: Snapshot[K, S, V], previousSnapshot: Option[Snapshot[K, S, V]]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
+      if (snapshot.seq != previousSnapshot.map { _.seq })
+        snapshotStore.put(key, snapshot)
+      else
+        snapshot.right[SnapshotStorage.Error].point[F]
+
+    /**
+     * Override this to control how snapshot persistence happens (e.g. asynchronously, synchronously)
+     */
+    protected def runPersistSnapshot: F[SnapshotStorage.Error \/ Snapshot[K, S, V]] => Unit =
+      _ => ()
+
+    /**
+     * Save the given `snapshot` if it is at a different sequence number to `previousSnapshot`. Set `previousSnapshot`
+     * to None to force a save.
+     */
+    private[stream] def persistSnapshot(key: K, snapshot: Snapshot[K, S, V], previousSnapshot: Option[Snapshot[K, S, V]]): Unit =
+      persistSnapshotOp(key, snapshot, previousSnapshot) |> runPersistSnapshot
   }
 
   /**
-   * Some kind of standard implementation of SaveAPI that refreshes certain snapshots (pre-fills caches)
-   * @param queryAPIsToRefresh
-   * @tparam Key
-   * @tparam Val
-   */
-  abstract class EagerRefreshingSaveAPI[Key, Val](queryAPIsToRefresh: List[QueryAPI[Key, Val]]) extends SaveAPI[Key, Val] {
-    import scalaz.std.list._
-    import scalaz.syntax.traverse._
-    override def save(key: K, operation: Operation[K, S, V, E]): F[SaveResult[K, S, V]] =
-     for {
-       saveResult <- super.save(key, operation)
-       _ <- queryAPIsToRefresh.traverseU { api => api.refreshSnapshot(key, None) }
-     } yield saveResult
-  }
-
-  /**
-   * TODO - Remove this if the QueryAPI/SaveAPI stuff works
-   * This is the main interface for consumers of the Event source. Implementations of this wrap logic for generating
-   * a view of data or aggregate (wrapped in a Snapshot) from an event stream of E events.
-   *
-   * Upon construction of an API, a suitable Events store, snapshot store, accumulator, and key transform
-   * need to be provided.
+   * SaveAPI allows consumers to save to the event stream. The aggregator argument i.e. QueryAPI implementation provides
+   * the logic for generating a suitable aggregator/snapshot on which to apply any logic encapsulated by the given
+   * `save` function `operation` argument.
    *
    * @tparam Key type for the aggregate (may be different from the key for the event stream)
    * @tparam Val Aggregate type
    */
-  trait API[Key, Val] {
-
+  class SaveAPI[Key, Val](aggregator: QueryAPI[Key, Val]) {
     type K = Key
     type V = Val
 
-    private[stream] def snapshotStore: SnapshotStorage[F, K, S, V]
+    import aggregator._
 
-    /**
-     * Accumulator function for generating a view of the data from a previous view and a new event.
-     * @param v The previous view
-     * @param e Event to add to previous view
-     * @return New view with event added.
-     */
-    protected def acc(key: K)(v: Snapshot[K, S, V], e: Event[KK, S, E]): Snapshot[K, S, V]
-
-    /**
-     * Transform a given aggregate key to the key for the underlying event stream
-     */
-    protected def eventStreamKey: K => KK
-
-    /**
-     * Return the current view of the data for key 'key'
-     */
-    final def get(key: K): F[Option[V]] =
-      getSnapshot(key).map { _.value }
-
-    /**
-     * @return the current view wrapped in Snashot of the data for key 'key'
-     */
-    final def getSnapshot(key: K): F[Snapshot[K, S, V]] =
-      getSnapshotAt(key, None)
-
-    /**
-     * @param key The key of the aggregate to retrieve
-     * @param at If none, get me the latest. If some, get me the snapshot at that specific sequence.
-     * @return A Snapshot for the aggregate at the given sequence number.
-     */
-    private def getSnapshotAt(key: K, at: Option[S]): F[Snapshot[K, S, V]] =
-      for {
-        persistedSnapshot <- snapshotStore.get(key, at.fold(SequenceQuery.latest[S])(SequenceQuery.before))
-        fromSeq = persistedSnapshot.seq
-        pred = at.fold[Event[KK, S, E] => Boolean] { _ => true } { seq => e => S.order.lessThanOrEqual(e.id.seq, seq) }
-        events = eventStore.get(eventStreamKey(key), fromSeq).takeWhile(pred)
-        theSnapshot <- generateSnapshot(persistedSnapshot, events, acc(key))
-      } yield theSnapshot
-
-    /**
-     * Return the view of the data for the key 'key' at the specified sequence number.
-     * @param key the key
-     * @param seq the sequence number of the event at which we want the see the view of the data.
-     * @return view of the data at event with sequence 'seq'
-     */
-    final def getAt(key: K, seq: S): F[Option[V]] =
-      getSnapshotAt(key, Some(seq)).map { _.value }
-
-    /**
-     * Get a stream of Snapshots starting from sequence number 'from' (if defined).
-     * @param key The key
-     * @param from Starting sequence number. None to get from the beginning of the stream.
-     * @return a stream of Snapshots starting from sequence number 'from' (if defined).
-     */
-    final def getHistory(key: K, from: Option[S]): F[Process[F, Snapshot[K, S, V]]] =
-      for {
-        startingSnapshot <- getSnapshotAt(key, from)
-      } yield eventStore.get(eventStreamKey(key), startingSnapshot.seq)
-        .scan[Snapshot[K, S, V]](startingSnapshot) {
-          case (view, event) => acc(key)(view, event)
-        }.drop(1)
-
-    /**
-     * Return the view of the data for the key 'key' at the specified timestamp.
-     *
-     * In this case we don't know the starting sequence number, so just start from the first available
-     * @param key The key
-     * @param time The timestamp at which we want to see the view of the data
-     * @return view of the data with events up to the given time stamp.
-     */
-    final def getAt(key: K, time: DateTime): F[Option[V]] = {
-      import com.github.nscala_time.time.Implicits._
-      // We need to get the earliest snapshot, then the stream of events from that snapshot
-      for {
-        earliestSnapshot <- snapshotStore.get(key, SequenceQuery.earliest[S])
-        value <- generateSnapshot(earliestSnapshot, eventStore.get(eventStreamKey(key), earliestSnapshot.seq).takeWhile { _.time <= time }, acc(key)).map { _.value }
-      } yield value
-    }
-
-    /**
-     * Save an event (generated from the given Operation) for the given key.
-     *
-     * Pass in the function that creates a possible transform,
-     * given the current Snapshot if there is one.
-     */
-    /*
-     * To save a new value, we need to get the latest snapshot in order to get the existing view of data and the
-     * latest event Id. Then we create a suitable transform and event and try to save it. Upon duplicate event,
-     * try the operation again (highly unlikely that this situation would occur).
-     *
-     * TODO - Consider adding some jitter and exponential backoff
-     */
     final def save(key: K, operation: Operation[K, S, V, E]): F[SaveResult[K, S, V]] =
       for {
-        old <- getSnapshot(key)
-        op = operation.run(old)
+        old <- generateLatestSnapshot(key)
+        op = operation.run(old.latest)
         result <- op.fold(
           Error.noop.left[Event[KK, S, E]].point[F],
           Error.reject(_).left[Event[KK, S, E]].point[F],
-          e => eventStore.put(Event.next[KK, S, E](eventStreamKey(key), old.seq, e))
+          e => eventStore.put(Event.next[KK, S, E](eventStreamKey(key), old.latest.seq, e))
         )
         transform <- result match {
           case -\/(Error.DuplicateEvent) =>
@@ -402,62 +267,13 @@ abstract class EventStream[F[_]: Monad: Catchable] {
           case -\/(Error.Rejected(r)) =>
             SaveResult.reject[K, S, V](r).point[F]
           case \/-(event) =>
-            SaveResult.success[K, S, V](acc(key)(old, event)).point[F]
+            val newSnapshot = acc(key)(old.latest, event)
+
+            for {
+              saveResult <- SaveResult.success[K, S, V](newSnapshot).point[F]
+              _ = persistSnapshot(key, newSnapshot, old.previousPersisted.some)
+            } yield saveResult
         }
       } yield transform
-
-    /**
-     * Essentially a runFoldMap on the given process to produce a snapshot after collapsing a stream of events.
-     * @param events The stream of events.
-     * @return Container F that when executed provides the snapshot.
-     */
-    private def generateSnapshot(start: Snapshot[K, S, V], events: Process[F, Event[KK, S, E]], f: (Snapshot[K, S, V], Event[KK, S, E]) => Snapshot[K, S, V]): F[Snapshot[K, S, V]] =
-      events.pipe {
-        process1.fold(start)(f)
-      }.runLastOr(start)
-
-    /**
-     * Updates stored snapshot that this API wraps.
-     * TODO - How should we best expose this functionality. We need to be able to update stored snapshots asynchronously
-     * either lazily (i.e. on read) or eagerly (i.e. when we save a new event).
-     * @param key The key
-     * @param forceStartAt If present, this will regenerate a snapshot starting from events at the specified sequence number.
-     *                     This should only be used when it is known that preceding events can be ignored. For example
-     *                     when new entities are added, there are no views of those entities before the events that add
-     *                     them!
-     * @return Error when saving snapshot or the snapshot that was saved.
-     */
-    final def refreshSnapshot(key: K, forceStartAt: Option[S]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
-      forceStartAt match {
-        case None =>
-          for {
-            latestStored <- snapshotStore.get(key, SequenceQuery.latest)
-            events = eventStore.get(eventStreamKey(key), latestStored.seq)
-            latestSnapshot <- generateSnapshot(latestStored, events, acc(key))
-            saveResult <-
-              if (latestSnapshot.seq != latestStored.seq)
-                saveSnapshot(key, latestSnapshot)
-              else
-                latestSnapshot.right[SnapshotStorage.Error].point[F]
-          } yield saveResult
-
-        case start @ Some(s) =>
-          for {
-            snapshotToSave <- generateSnapshot(Snapshot.zero, eventStore.get(eventStreamKey(key), start), acc(key))
-            saveResult <- saveSnapshot(key, snapshotToSave)
-          } yield saveResult
-      }
-
-    /**
-     * Forces a save of the given snapshot. This can be used as a shortcut to refreshSnapshot if you already have the
-     * snapshot that you want to save.
-     * TODO - How should we best expose this functionality. Feels like a bit of a hack for optimisation.
-     * @param key The key
-     * @param snapshot Snapshot to save
-     * @return Error when saving snapshot or the snapshot that was saved.
-     */
-    final def saveSnapshot(key: K, snapshot: Snapshot[K, S, V]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
-      snapshotStore.put(key, snapshot)
-
   }
 }

@@ -3,9 +3,9 @@ package stream
 
 import kadai.Invalid
 
-import scalaz.{ Monad, \/ }
+import scalaz.{ Applicative, \/ }
 import scalaz.syntax.either._
-import scalaz.syntax.monad._
+import scalaz.syntax.applicative._
 
 /**
  * Implementations of this interface deal with persisting snapshots so that they don't need to be recomputed every time.
@@ -39,10 +39,10 @@ trait SnapshotStorage[F[_], K, S, V] {
  * Dummy implementation that does not store snapshots.
  */
 object SnapshotStorage {
-  def none[F[_]: Monad, K, S, V]: SnapshotStorage[F, K, S, V] =
+  def none[F[_]: Applicative, K, S, V]: SnapshotStorage[F, K, S, V] =
     new NoSnapshotStorage
 
-  private class NoSnapshotStorage[F[_]: Monad, K, S, V] extends SnapshotStorage[F, K, S, V] {
+  private class NoSnapshotStorage[F[_]: Applicative, K, S, V] extends SnapshotStorage[F, K, S, V] {
     def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[K, S, V]] =
       Snapshot.zero[K, S, V].point[F]
 

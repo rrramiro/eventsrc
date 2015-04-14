@@ -7,7 +7,7 @@ object Dependencies {
   lazy val ARGONAUT   = "6.1-M4"
   lazy val KADAI      = "3.0.0"
   lazy val LOG4J      = "2.0.1"
-  lazy val AWS_SCALA  = "2.0.0-M2"
+  lazy val AWS_SCALA  = "2.0.0-M3"
   lazy val SCHMETRICS = "1.0.1"
 
   lazy val scalaz =
