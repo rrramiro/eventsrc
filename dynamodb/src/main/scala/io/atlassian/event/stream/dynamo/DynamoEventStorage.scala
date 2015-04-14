@@ -1,6 +1,5 @@
 package io.atlassian.event.stream.dynamo
 
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.Sequence
@@ -13,7 +12,7 @@ import scalaz.stream.Process
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
 
-class DynamoEventStorage[F[_], KK, S: Sequence, E](awsClient: AmazonDynamoDBClient, tableDef: TableDefinition[KK, E, KK, S])(
+class DynamoEventStorage[F[_], KK, S: Sequence, E](tableDef: TableDefinition[KK, E, KK, S])(
   implicit M: Monad[F],
   C: Catchable[F],
   runAction: DynamoDBAction ~> Task,
