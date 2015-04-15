@@ -218,7 +218,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
 
     private final def persistSnapshotOp(key: K, snapshot: Snapshot[K, S, V], previousSnapshot: Option[Snapshot[K, S, V]]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
       if (snapshot.seq != previousSnapshot.map { _.seq })
-        snapshotStore.put(key, snapshot)
+        snapshotStore.put(key, snapshot, SnapshotStoreMode.Cache)
       else
         snapshot.right[SnapshotStorage.Error].point[F]
 

@@ -10,7 +10,7 @@ import scalaz.\/
  *
  * The event Id is quite a useful thing in addition to the value of the snapshot.
  *
- * @tparam A The type of the value wrapped by the Snapshot
+ * @tparam V The type of the value wrapped by the Snapshot
  */
 sealed trait Snapshot[K, S, V] {
   import Snapshot._

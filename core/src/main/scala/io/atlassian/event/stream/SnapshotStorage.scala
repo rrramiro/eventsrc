@@ -30,9 +30,10 @@ trait SnapshotStorage[F[_], K, S, V] {
    * Save a given snapshot
    * @param snapshotKey The key
    * @param snapshot The snapshot to save
+   * @param mode Defines whether the given snapshot should be deemed the earliest point in the event stream (Epoch) or not (Cache)
    * @return Either a Throwable (for error) or the saved snapshot.
    */
-  def put(snapshotKey: K, snapshot: Snapshot[K, S, V]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]]
+  def put(snapshotKey: K, snapshot: Snapshot[K, S, V], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[K, S, V]]
 }
 
 /**
@@ -46,7 +47,7 @@ object SnapshotStorage {
     def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[K, S, V]] =
       Snapshot.zero[K, S, V].point[F]
 
-    def put(key: K, snapshot: Snapshot[K, S, V]): F[Error \/ Snapshot[K, S, V]] =
+    def put(key: K, snapshot: Snapshot[K, S, V], mode: SnapshotStoreMode): F[Error \/ Snapshot[K, S, V]] =
       snapshot.right[Error].point[F]
   }
 
@@ -57,4 +58,11 @@ object SnapshotStorage {
 
     case class Unknown(i: Invalid) extends Error
   }
+}
+
+sealed trait SnapshotStoreMode
+
+object SnapshotStoreMode {
+  case object Epoch extends SnapshotStoreMode
+  case object Cache extends SnapshotStoreMode
 }

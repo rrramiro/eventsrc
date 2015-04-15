@@ -1,4 +1,4 @@
-package io.atlassian.event.source
+package io.atlassian.event
 
 import org.specs2.{ScalaCheck, SpecificationWithJUnit}
 

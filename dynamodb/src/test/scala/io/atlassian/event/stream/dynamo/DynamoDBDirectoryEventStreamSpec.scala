@@ -5,6 +5,7 @@ package dynamo
 import argonaut._, Argonaut._
 import io.atlassian.aws.WrappedInvalidException
 import io.atlassian.aws.dynamodb._
+import io.atlassian.event.stream.memory.{MemorySingleSnapshotStorage}
 import kadai.Attempt
 import org.scalacheck.{ Arbitrary, Prop }
 import org.specs2.main.Arguments
@@ -70,6 +71,12 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Specifi
   def duplicateUsername = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
     val eventStream = newEventStream
     val api = eventStream.AllUsersQueryAPIWithNoSnapshots
+    testDuplicateUsername(eventStream)(api)(k, u1, u2)
+  }
+
+  def duplicateUsernameWithSnapshot = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
+    val eventStream = newEventStream
+    val api = new eventStream.AllUsersQueryAPIWithSnapshotPersistence(DirectoryIdListUserSnapshotStorage)
     testDuplicateUsername(eventStream)(api)(k, u1, u2)
   }
 
@@ -361,5 +368,4 @@ class DynamoDirectoryEventStream(zone: ZoneId)(implicit runner: DynamoDBAction ~
 //  }
 }
 
-// TODO - snapshot storage for DirectoryId -> List[User]
-//  Q)
+object DirectoryIdListUserSnapshotStorage extends MemorySingleSnapshotStorage[Task, DirectoryEventStream.DirectoryId, TwoPartSequence, List[User]]

@@ -30,6 +30,9 @@ object Transform {
   case class Insert[A](a: A) extends Transform[A]
   case object Delete extends Transform[Nothing]
 
+  private[event] def insert[A](a: A): Transform[A] =
+    Insert(a)
+
   implicit object TransformFunctor extends Functor[Transform] {
     def map[A, B](fa: Transform[A])(f: A => B) = fa map f
   }

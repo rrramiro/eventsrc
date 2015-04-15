@@ -1,20 +1,16 @@
 package io.atlassian.event
 package stream
+package memory
 
 import io.atlassian.event.stream.EventStream.QueryConsistency
-import org.scalacheck.{ Gen, Arbitrary, Prop }
-import org.specs2.{ ScalaCheck, SpecificationWithJUnit }
+import org.scalacheck.Prop
+import org.specs2.{ScalaCheck, SpecificationWithJUnit}
 
-import scalaz.\/
 import scalaz.concurrent.Task
-import scalaz.syntax.either._
-
-import DirectoryEventStream._
 
 class InMemoryDirectoryEventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
 
   import DirectoryEventStream._
-  import Operation.syntax._
 
   def is =
     s2"""
@@ -29,7 +25,7 @@ class InMemoryDirectoryEventStreamSpec extends SpecificationWithJUnit with Scala
 
       """
 
-  private def newEventStream = new InMemoryDirectoryEventStream
+  private def newEventStream: DirectoryEventStream = new InMemoryDirectoryEventStream
 
   def addMultipleUsers = Prop.forAll { (k: DirectoryId, u1: User, u2: User) =>
     u1.username != u2.username ==> {
@@ -135,17 +131,4 @@ class InMemoryDirectoryEventStream extends DirectoryEventStream(1) {
   override val eventStore = new MemoryEventStorage[DirectoryEventStream.DirectoryId, TwoPartSequence, DirectoryEvent]
 }
 
-object DirectoryIdListUserSnapshotStorage extends SnapshotStorage[Task, DirectoryId, TwoPartSequence, List[User]] {
-  val map = collection.concurrent.TrieMap[DirectoryId, Snapshot[DirectoryId, TwoPartSequence, List[User]]]()
-
-  def get(key: DirectoryId, sequence: SequenceQuery[TwoPartSequence]): Task[Snapshot[DirectoryId, TwoPartSequence, List[User]]] =
-    Task {
-      map.getOrElse(key, Snapshot.zero)
-    }
-
-  def put(key: DirectoryId, view: Snapshot[DirectoryId, TwoPartSequence, List[User]]): Task[SnapshotStorage.Error \/ Snapshot[DirectoryId, TwoPartSequence, List[User]]] =
-    Task {
-      map += (key -> view)
-      view.right
-    }
-}
+object DirectoryIdListUserSnapshotStorage extends MemorySingleSnapshotStorage[Task, DirectoryEventStream.DirectoryId, TwoPartSequence, List[User]]

@@ -93,7 +93,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
             (id, t) => Snapshot.deleted(id, t)) // This should not happen
         }
 
-      def put(key: DirectoryUsername, view: Snapshot[DirectoryUsername, S, UserId]): Task[SnapshotStorage.Error \/ Snapshot[DirectoryUsername, S, UserId]] =
+      def put(key: DirectoryUsername, view: Snapshot[DirectoryUsername, S, UserId], mode: SnapshotStoreMode): Task[SnapshotStorage.Error \/ Snapshot[DirectoryUsername, S, UserId]] =
         Task {
           map.get(prefix(key)) match {
             case None =>

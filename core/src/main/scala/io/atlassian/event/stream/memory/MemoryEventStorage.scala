@@ -1,11 +1,16 @@
-package io.atlassian.event
-package stream
+package io.atlassian.event.stream.memory
+
+import io.atlassian.event.Sequence
+import io.atlassian.event.stream.{Event, EventStorage, EventStream}
 
 import scalaz.\/
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.syntax.either._
 
+/**
+ * Basic implementation that stores events in an in-memory map.
+ */
 class MemoryEventStorage[KK, S: Sequence, E] extends EventStorage[Task, KK, S, E] {
   val map = collection.concurrent.TrieMap[KK, List[Event[KK, S, E]]]()
 
