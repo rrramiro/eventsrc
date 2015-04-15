@@ -17,6 +17,7 @@ import scalaz.concurrent.Task
 import scalaz.std.anyVal._
 import scalaz.syntax.std.option._
 import scalaz.std.option._
+import scalaz.std.list._
 
 @RunWith(classOf[org.specs2.runner.JUnitRunner])
 class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec with LocalDynamoDB with DynamoDBActionMatchers {
@@ -82,6 +83,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
        return error when saving a duplicate event        ${eventReturnsErrorForDuplicateEvent.set(minTestsOk = NUM_TESTS)}
        return the correct number of events (no paging)   ${nonPagingGetWorks.set(minTestsOk = NUM_TESTS)}
        return the correct number of events (with paging) ${if (IS_LOCAL) pagingGetWorks.set(minTestsOk = 1) else skipped("SKIPPED - not run in AWS integration mode because it is slow")}
+       return the correct number of events when a 'from sequence' is specified ${getFromWorks.set(minTestsOk = NUM_TESTS)}
 
                                                   ${Step(deleteTestTable)}
                                                   ${Step(stopLocalDynamoDB)}
@@ -126,6 +128,30 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
         case _               => ko
       }) and (last.attemptRun match {
         case \/-(saved) => saved === Some(v3)
+        case _          => ko
+      })
+    }
+
+  def getFromWorks =
+    Prop.forAll { (nonEmptyKey: UniqueString, v1: String, v2: String, v3: String) =>
+      val values = List(v1, v2, v3)
+      val key = nonEmptyKey.unwrap
+
+      // Save events
+      values.zipWithIndex.foreach { case (s, i) =>
+        val eventId = EventId[KK, S](nonEmptyKey.unwrap, i.toLong)
+        val event = Event[KK, S, E](eventId, DateTime.now, Transform.insert(s))
+        DBEventStorage.put(event).run
+      }
+
+      // Make sure we get the right number of events and the value is correct
+      val r: Task[Int] = DBEventStorage.get(key, Some(0)).runFoldMap { _ => 1 }
+      val last: Task[List[String]] = DBEventStorage.get(key, Some(0)).runFoldMap { x => List(x.operation.value) }.map { _.flatten }
+      (r.attemptRun match {
+        case \/-(eventCount) => eventCount === 2
+        case _               => ko
+      }) and (last.attemptRun match {
+        case \/-(saved) => saved === List(v2, v3)
         case _          => ko
       })
     }

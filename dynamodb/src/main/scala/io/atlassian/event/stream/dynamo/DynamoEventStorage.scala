@@ -82,7 +82,7 @@ class DynamoEventStorage[F[_], KK, S: Sequence, E](tableDef: TableDefinition[KK,
         fromSeq.fold {
           table.Query.hash(key)
         } {
-          seq => table.Query.range(key, seq, Comparison.Gte)
+          seq => table.Query.range(key, seq, Comparison.Gt)
         }
       }
     }.translate(ToF)
