@@ -30,7 +30,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
 
     object Columns {
       implicit val transformOpDecoder: Decoder[Transform.Op] =
-        Decoder[String].mapPartial(Function.unlift(Transform.Op.unapply))
+        Decoder[String].collect(Function.unlift(Transform.Op.unapply))
       implicit val transformOpEncoder: Encoder[Transform.Op] =
         Encoder[String].contramap(Transform.Op.apply)
 

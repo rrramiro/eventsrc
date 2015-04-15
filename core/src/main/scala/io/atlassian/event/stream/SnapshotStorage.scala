@@ -60,7 +60,15 @@ object SnapshotStorage {
   }
 }
 
-sealed trait SnapshotStoreMode
+sealed trait SnapshotStoreMode {
+  import SnapshotStoreMode._
+
+  def fold[X](epoch: => X, cache: => X): X =
+    this match {
+      case Epoch => epoch
+      case Cache => cache
+    }
+}
 
 object SnapshotStoreMode {
   case object Epoch extends SnapshotStoreMode

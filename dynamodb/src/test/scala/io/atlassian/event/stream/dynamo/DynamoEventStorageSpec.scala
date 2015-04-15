@@ -33,7 +33,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
     val seq = Column[S]("seq")
     val value = Column[V]("value")
     implicit val transformOpDecoder: Decoder[Transform.Op] =
-      Decoder[String].mapPartial(Function.unlift(Transform.Op.unapply))
+      Decoder[String].collect(Function.unlift(Transform.Op.unapply))
     implicit val transformOpEncoder: Encoder[Transform.Op] =
       Encoder[String].contramap(Transform.Op.apply)
     val transform = Column.compose2[E](Column[Transform.Op]("Operation"), value.liftOption) {
