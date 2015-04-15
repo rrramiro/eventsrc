@@ -12,27 +12,38 @@ import scalaz.stream.Process
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
 
+/**
+ * Implementation of EventStorage using DynamoDB via the aws-scala library. To use it:
+ *   1. Provide a table definition. Specifically, this requires an event stream key NamedColumn, a Column definition
+ *   for the events, and a NamedColumn for the sequence type. This in turn will require Decoders/Encoders to be
+ *   defined for the key, sequence and event columns.
+ *   2. Provide an interpreter for DynamoDBActions to Task. DynamoDBActions are created inside and need to be run.
+ *   3. Provide a transform from Task to your desired container type. Task is actually a good option since it needs a
+ *   Monad and Catchable, so the transform can just be a NaturalTransformation.refl[Task].
+ *
+ * @tparam F Container around operations on an underlying data store e.g. Task.
+ */
 class DynamoEventStorage[F[_], KK, S: Sequence, E](tableDef: TableDefinition[KK, E, KK, S])(
   implicit M: Monad[F],
   C: Catchable[F],
   runAction: DynamoDBAction ~> Task,
   ToF: Task ~> F) extends EventStorage[F, KK, S, E] {
 
-  type EID = EventId[KK, S]
-  object EID {
+  private type EID = EventId[KK, S]
+  private object EID {
     def apply(k: KK, s: S): EID = EventId[KK, S](k, s)
     def unapply(e: EID): Option[(KK, S)] = EventId.unapply[KK, S](e)
   }
-  type EV = Event[KK, S, E]
+  private type EV = Event[KK, S, E]
 
-  object table extends Table {
+  private object table extends Table {
     type K = EID
     type V = EV
     type H = KK
     type R = S
   }
 
-  object Columns {
+  private object Columns {
     val eventId = Column.compose2[EID](tableDef.hash, tableDef.range) { case EID(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
     val lastModified = Column[DateTime]("LastModifiedTimestamp")
 
@@ -44,14 +55,12 @@ class DynamoEventStorage[F[_], KK, S: Sequence, E](tableDef: TableDefinition[KK,
     }
   }
 
-  val interpret: table.DBAction ~> Task =
+  private val interpret: table.DBAction ~> Task =
     runAction compose
       table.transform(DynamoDB.interpreter(table)(
         TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)(tableDef.hash.decoder, tableDef.range.decoder)))
 
-
   override def get(key: KK, fromSeq: Option[S]): Process[F, Event[KK, S, E]] = {
-
     import Process._
 
     def requestPage(q: table.Query): Task[Page[table.R, EV]] = {
