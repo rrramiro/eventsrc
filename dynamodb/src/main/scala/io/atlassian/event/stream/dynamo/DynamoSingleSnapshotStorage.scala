@@ -19,39 +19,16 @@ class DynamoSingleSnapshotStorage[F[_]: Monad, KK, S, VV](tableDef: TableDefinit
                                                          (implicit runAction: DynamoDBAction ~> F)
   extends SnapshotStorage[F, KK, S, VV] {
 
-  case class WrappedKey(key: KK, dummy: String = "")
+  private[dynamo] case class WrappedKey(key: KK, dummy: String = "")
 
-  object table extends Table {
+  private[dynamo] object table extends Table {
     type K = WrappedKey
     type V = Snapshot[KK, S, VV]
     type H = KK
     type R = String
   }
 
-  sealed trait SnapshotType
-
-  object SnapshotType {
-    case object NoSnapshot extends SnapshotType
-    case object Value extends SnapshotType
-    case object Deleted extends SnapshotType
-
-    def apply(t: SnapshotType): String =
-      t match {
-        case NoSnapshot => "none"
-        case Value => "value"
-        case Deleted => "deleted"
-      }
-
-    def unapply(s: String): Option[SnapshotType] =
-      s.toLowerCase match {
-        case "none" => NoSnapshot.some
-        case "value" => Value.some
-        case "deleted" => Deleted.some
-        case _ => none
-      }
-  }
-
-  object Columns {
+  private[dynamo] object Columns {
     import SnapshotType._
 
     implicit val SnapshotTypeEncoder: Encoder[SnapshotType] =
@@ -82,7 +59,7 @@ class DynamoSingleSnapshotStorage[F[_]: Monad, KK, S, VV](tableDef: TableDefinit
     }
   }
 
-  private[stream] val tableDefinition =
+  private[dynamo] val tableDefinition =
     TableDefinition.from(tableDef.name, Columns.wrappedKey, Columns.value, tableDef.hash, Columns.dummy)(tableDef.hash.decoder, Columns.dummy.decoder)
 
   private val interpret: table.DBAction ~> F =

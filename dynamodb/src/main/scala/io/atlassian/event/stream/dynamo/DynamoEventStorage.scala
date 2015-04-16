@@ -29,12 +29,12 @@ class DynamoEventStorage[F[_], KK, S: Sequence, E](tableDef: TableDefinition[KK,
   runAction: DynamoDBAction ~> Task,
   ToF: Task ~> F) extends EventStorage[F, KK, S, E] {
 
-  private[stream] type EID = EventId[KK, S]
-  private[stream] object EID {
+  private[dynamo] type EID = EventId[KK, S]
+  private[dynamo] object EID {
     def apply(k: KK, s: S): EID = EventId[KK, S](k, s)
     def unapply(e: EID): Option[(KK, S)] = EventId.unapply[KK, S](e)
   }
-  private[stream] type EV = Event[KK, S, E]
+  private[dynamo] type EV = Event[KK, S, E]
 
   private object table extends Table {
     type K = EID
@@ -43,7 +43,7 @@ class DynamoEventStorage[F[_], KK, S: Sequence, E](tableDef: TableDefinition[KK,
     type R = S
   }
 
-  private[stream] object Columns {
+  private[dynamo] object Columns {
     val eventId = Column.compose2[EID](tableDef.hash, tableDef.range) { case EID(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
     val lastModified = Column[DateTime]("LastModifiedTimestamp")
 
