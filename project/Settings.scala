@@ -2,9 +2,6 @@ import sbt._, Keys._
 import sbtrelease.ReleasePlugin._
 
 object Settings {
-  // "-language:_"
-  //   Seq( "-Xlog-free-terms")
-
   val scalacFlags =  Seq(
     "-deprecation"
   , "-encoding", "UTF-8" // yes, this is 2 args
@@ -14,11 +11,12 @@ object Settings {
   , "-language:experimental.macros"
   , "-language:higherKinds"
   , "-language:implicitConversions"
+  , "-language:reflectiveCalls"
   , "-unchecked"
   , "-Xfatal-warnings"
 //  , "-Xlint" // commented out due to https://issues.scala-lang.org/browse/SI-8476
   , "-Yno-adapted-args"
-  //, "-Ywarn-all"
+  //, "-Ywarn-all"  // Doesn't work with scala 2.11
   , "-Ywarn-dead-code" // N.B. doesn't work well with the ??? hole
   , "-Ywarn-numeric-widen"
   , "-Ywarn-value-discard"     
@@ -31,8 +29,8 @@ object Settings {
     Seq[Def.Setting[_]] (
       organization := "io.atlassian"
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom
-    , scalaVersion := "2.11.5"
-    , crossScalaVersions  := Seq("2.11.5", "2.10.4")
+    , scalaVersion := "2.11.6"
+    , crossScalaVersions  := Seq("2.11.6", "2.10.5")
     , ReleaseKeys.crossBuild := true
     , autoScalaLibrary := false
     , scalacOptions ++= scalacFlags 

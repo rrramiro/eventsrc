@@ -3,6 +3,8 @@ import sbt.Keys._
 import Settings._
 
 trait Modules {
+  lazy val depTest = "test->test;compile->compile"
+
   def project(n: String, deps: Seq[ModuleID] = Vector()): Project = 
     Project(
       id = n
@@ -15,7 +17,9 @@ trait Modules {
 
   lazy val core = project("core")
 
-  lazy val dynamo = project("dynamodb", Dependencies.dynamodb).dependsOn(core)
+  lazy val coreTest = core % depTest
+
+  lazy val dynamo = project("dynamodb", Dependencies.dynamodb).dependsOn(coreTest)
 
   // aggregate
   lazy val all = 

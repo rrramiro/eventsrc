@@ -1,3 +1,4 @@
-Origin
+Eventsrc
 ======
-Single DB all tenant reimplementation of Horde
+
+Library for implementing event sourcing data persistence in your Scala project.
