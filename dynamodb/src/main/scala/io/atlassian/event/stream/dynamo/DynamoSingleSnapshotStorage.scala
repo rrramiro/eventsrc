@@ -54,7 +54,7 @@ class DynamoSingleSnapshotStorage[F[_]: Monad, KK, S, VV](tableDef: TableDefinit
     } {
       case (NoSnapshot, _, _, _) => Snapshot.zero[KK, S, VV]
       case (Deleted, _, Some(s), Some(t)) => Snapshot.deleted(s, t)
-      case (Value, Some(v), Some(s), Some(t)) => Snapshot.value(v, s, t)
+      case (Value, Some(v), Some(s), Some(t)) => Snapshot.value(v)(s, t)
       case _ => ???
     }
   }
