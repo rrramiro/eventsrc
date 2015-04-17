@@ -15,7 +15,7 @@ trait Modules {
     , libraryDependencies ++= (Dependencies.common ++ deps)
     )
 
-  lazy val core = project("core")
+  lazy val core = project("core", Dependencies.nscalatime ++ Dependencies.argonaut)
 
   lazy val coreTest = core % depTest
 

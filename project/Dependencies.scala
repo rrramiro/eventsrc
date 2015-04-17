@@ -4,7 +4,7 @@ import Keys._
 object Dependencies {
 
   lazy val SCALAZ     = "7.1.1"
-  lazy val ARGONAUT   = "6.1-M4"
+  lazy val ARGONAUT   = "6.1-M6"
   lazy val KADAI      = "3.0.0"
   lazy val LOG4J      = "2.0.1"
   lazy val AWS_SCALA  = "2.0.0-M4"
@@ -28,7 +28,7 @@ object Dependencies {
 
   lazy val kadai =
     Seq(
-      "io.atlassian"             %% "kadai"      % KADAI
+      "io.atlassian"             %% "kadai-core"      % KADAI
     ) ++ log4j
 
 
@@ -59,18 +59,13 @@ object Dependencies {
     , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % AWS_SCALA  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
     )
 
-  // lazy val schmetricsCore =
-  //   Seq(
-  //     "io.atlassian.schmetrics" %% "schmetrics-core" % SCHMETRICS
-  //   )
+  lazy val nscalatime =
+    Seq(
+      "com.github.nscala-time" %% "nscala-time" % "1.8.0"
+    )
 
-  // lazy val schmetricsAws =
-  //   Seq(
-  //     "io.atlassian.schmetrics" %% "schmetrics-aws" % SCHMETRICS
-  //   )
-
-  // lazy val schmetricsFinagle =
-  //   Seq(
-  //     "io.atlassian.schmetrics" %% "schmetrics-finagle" % SCHMETRICS
-  //   )
+  lazy val argonaut =
+    Seq(
+      "io.argonaut"         %% "argonaut"          % ARGONAUT
+    )
 }
