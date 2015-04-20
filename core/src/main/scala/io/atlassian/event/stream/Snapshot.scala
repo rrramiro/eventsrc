@@ -56,10 +56,10 @@ object Snapshot {
   def zero[K, S, V]: Snapshot[K, S, V] =
     NoSnapshot[K, S, V]()
 
-  def value[K, S, V](view: V, seq: S, time: DateTime): Snapshot[K, S, V] =
-    Value(view, seq, time)
+  def value[K, S, V](view: V): (S, DateTime) => Snapshot[K, S, V] =
+    (seq: S, time: DateTime) => Value(view, seq, time)
 
-  def deleted[K, S, V](seq: S, time: DateTime): Snapshot[K, S, V] =
-    Deleted(seq, time)
+  def deleted[K, S, V]: (S, DateTime) => Snapshot[K, S, V] =
+    (seq: S, time: DateTime) => Deleted(seq, time)
 }
 

@@ -11,5 +11,15 @@ case class Event[KK, S, E](id: EventId[KK, S], time: DateTime, operation: E)
 object Event {
   def next[KK, S: Sequence, E](key: KK, seq: Option[S], op: E): Event[KK, S, E] =
     Event(EventId(key, seq.map { Sequence[S].next }.getOrElse { Sequence[S].first }), DateTime.now, op)
+
+  def at[KK, S, E](e: Event[KK, S, E]): (S, DateTime) =
+    (e.id.seq, e.time)
+
+  object syntax {
+    implicit class EventSyntax[KK, S, E](val e: Event[KK, S, E]) extends AnyVal {
+      def at: (S, DateTime) =
+        Event.at(e)
+    }
+  }
 }
 

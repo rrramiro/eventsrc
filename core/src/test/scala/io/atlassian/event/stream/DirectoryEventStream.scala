@@ -89,6 +89,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
         Task {
           map.getOrElse(prefix(key), Snapshot.zero).fold(Snapshot.zero[DirectoryUsername, S, UserId],
             (m, id, t) =>
+
               m.get(key._2).fold(Snapshot.deleted[DirectoryUsername, S, UserId](id, t)) { uid => Snapshot.value(uid, id, t) },
             (id, t) => Snapshot.deleted(id, t)) // This should not happen
         }
