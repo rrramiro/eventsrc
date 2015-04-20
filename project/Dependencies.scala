@@ -28,7 +28,6 @@ object Dependencies {
   lazy val kadai =
     Seq(
       "io.atlassian"             %% "kadai-core"      % KADAI
-    , "io.atlassian"             %% "kadai-logging"      % KADAI
     ) ++ log4j
 
 
