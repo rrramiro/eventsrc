@@ -5,17 +5,16 @@ object Dependencies {
 
   lazy val SCALAZ     = "7.1.1"
   lazy val ARGONAUT   = "6.1-M6"
-  lazy val KADAI      = "3.0.0"
+  lazy val KADAI      = "3.1.1"
   lazy val LOG4J      = "2.0.1"
-  lazy val AWS_SCALA  = "2.0.0-M4"
-  lazy val SCHMETRICS = "1.0.1"
+  lazy val AWS_SCALA  = "2.0.0-M5"
 
   lazy val scalaz =
     Seq(
       "org.scalaz"               %% "scalaz-core"       % SCALAZ
     , "org.scalaz"               %% "scalaz-effect"     % SCALAZ
     , "org.scalaz"               %% "scalaz-concurrent" % SCALAZ
-    , "org.scalaz.stream"        %% "scalaz-stream"     % "0.6a"
+    , "org.scalaz.stream"        %% "scalaz-stream"     % "0.7a"
     )
 
   lazy val log4j =
