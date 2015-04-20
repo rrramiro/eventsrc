@@ -23,12 +23,12 @@ object Dependencies {
       "org.apache.logging.log4j" % "log4j-api"          % LOG4J
     , "org.apache.logging.log4j" % "log4j-core"         % LOG4J
     , "org.apache.logging.log4j" % "log4j-core"         % LOG4J % "test"
- // , "org.apache.logging.log4j" % "log4j-jcl"          % LOG4J % "test" // if we need to intercept JCL
     )
 
   lazy val kadai =
     Seq(
       "io.atlassian"             %% "kadai-core"      % KADAI
+    , "io.atlassian"             %% "kadai-logging"      % KADAI
     ) ++ log4j
 
 
@@ -59,13 +59,13 @@ object Dependencies {
     , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % AWS_SCALA  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
     )
 
+  lazy val argonaut =
+    Seq(
+      "io.argonaut" %% "argonaut" % ARGONAUT
+    )
+
   lazy val nscalatime =
     Seq(
       "com.github.nscala-time" %% "nscala-time" % "1.8.0"
-    )
-
-  lazy val argonaut =
-    Seq(
-      "io.argonaut"         %% "argonaut"          % ARGONAUT
     )
 }

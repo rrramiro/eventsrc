@@ -78,7 +78,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
       e.operation match {
         case AddUser(user) =>
           if (key._2 == user.username)
-            Snapshot.value(user.id, e.id.seq, e.time)
+            Snapshot.value(user.id)(e.id.seq, e.time)
           else
             v
       }
@@ -90,7 +90,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
           map.getOrElse(prefix(key), Snapshot.zero).fold(Snapshot.zero[DirectoryUsername, S, UserId],
             (m, id, t) =>
 
-              m.get(key._2).fold(Snapshot.deleted[DirectoryUsername, S, UserId](id, t)) { uid => Snapshot.value(uid, id, t) },
+              m.get(key._2).fold(Snapshot.deleted[DirectoryUsername, S, UserId](id, t)) { uid => Snapshot.value(uid)(id, t) },
             (id, t) => Snapshot.deleted(id, t)) // This should not happen
         }
 
@@ -99,7 +99,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
           map.get(prefix(key)) match {
             case None =>
               val newSnapshot: Snapshot[DirectoryUsername, S, Map[Username, UserId]] =
-                view.fold(Snapshot.zero[DirectoryUsername, S, Map[Username, UserId]], (uid, id, t) => Snapshot.value(Map(key._2 -> uid), id, t), (id, t) => Snapshot.value(Map(), id, t))
+                view.fold(Snapshot.zero[DirectoryUsername, S, Map[Username, UserId]], (uid, id, t) => Snapshot.value(Map(key._2 -> uid))(id, t), Snapshot.value(Map()))
               map += (prefix(key) -> newSnapshot)
             case Some(s) =>
               (s, view) match {
