@@ -2,7 +2,6 @@ package io.atlassian.event.stream.dynamo
 
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
 import io.atlassian.aws.dynamodb._
-import io.atlassian.event.Sequence
 import io.atlassian.event.stream.{Event, EventId, EventStorage, EventStream}
 import org.joda.time.DateTime
 
@@ -23,11 +22,12 @@ import scalaz.syntax.monad._
  *
  * @tparam F Container around operations on an underlying data store e.g. Task.
  */
-class DynamoEventStorage[F[_], KK, S: Sequence, E](tableDef: TableDefinition[KK, E, KK, S])(
-  implicit M: Monad[F],
-  C: Catchable[F],
+class DynamoEventStorage[F[_], KK, S, E](
+  tableDef: TableDefinition[KK, E, KK, S],
   runAction: DynamoDBAction ~> Task,
-  ToF: Task ~> F) extends EventStorage[F, KK, S, E] {
+  ToF: Task ~> F)(
+  implicit M: Monad[F],
+  C: Catchable[F]) extends EventStorage[F, KK, S, E] {
 
   private[dynamo] type EID = EventId[KK, S]
   private[dynamo] object EID {
@@ -57,9 +57,11 @@ class DynamoEventStorage[F[_], KK, S: Sequence, E](tableDef: TableDefinition[KK,
 
   private val interpret: table.DBAction ~> Task =
     runAction compose
-      table.transform(DynamoDB.interpreter(table)(
-        TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)(tableDef.hash.decoder, tableDef.range.decoder)))
+      table.transform(DynamoDB.interpreter(table)(schema))
 
+  lazy val schema =
+    TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)(tableDef.hash.decoder, tableDef.range.decoder)
+  
   override def get(key: KK, fromSeq: Option[S]): Process[F, Event[KK, S, E]] = {
     import Process._
 

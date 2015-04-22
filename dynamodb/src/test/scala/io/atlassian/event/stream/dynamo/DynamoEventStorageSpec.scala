@@ -51,15 +51,14 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
 
   }
 
-  implicit val TaskToTask: Task ~> Task = scalaz.NaturalTransformation.refl[Task]
-
-  object DBEventStorage extends DynamoEventStorage[Task, KK, S, E](DynamoMappings.tableDefinition)
-
-  implicit lazy val runner: DynamoDBAction ~> Task =
+  val TaskToTask: Task ~> Task = scalaz.NaturalTransformation.refl[Task]
+  lazy val runner: DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
         a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException(i)) }, { a => Task.now(a) })
     }
+
+  object DBEventStorage extends DynamoEventStorage[Task, KK, S, E](DynamoMappings.tableDefinition, runner, TaskToTask)
 
   implicit val JodaDateTimeEqual: Equal[DateTime] =
     Equal.equalBy { _.withZone(DateTimeZone.UTC).toInstant.getMillis }

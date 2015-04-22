@@ -36,7 +36,7 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
     if (IS_LOCAL) 100
     else 10
 
-  implicit lazy val runner: DynamoDBAction ~> Task =
+  lazy val runner: DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
         a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException(i)) }, { a => Task.now(a) })
@@ -48,7 +48,7 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
   def deleteTestTable() =
     DynamoDBOps.deleteTable(DirectoryEventStreamDynamoMappings.schema)
 
-  override protected def newEventStream() = new DynamoDirectoryEventStream(1)
+  override protected def newEventStream() = new DynamoDirectoryEventStream(1)(runner)
   override protected def allUserSnapshot() = DirectoryIdListUserSnapshotStorage
 
 }
@@ -103,12 +103,12 @@ object DirectoryEventStreamDynamoMappings {
   val schema = TableDefinition.from[DirectoryId, DirectoryEvent, DirectoryId, TwoPartSequence](tableName, key, event, key, seq)
 }
 
-class DynamoDirectoryEventStream(zone: ZoneId)(implicit runner: DynamoDBAction ~> Task) extends DirectoryEventStream(zone) {
+class DynamoDirectoryEventStream(zone: ZoneId)(runner: DynamoDBAction ~> Task) extends DirectoryEventStream(zone) {
   import DirectoryEventStreamDynamoMappings._
 
-  implicit val TaskToTask = NaturalTransformation.refl[Task]
+  val TaskToTask = NaturalTransformation.refl[Task]
 
-  val eventStore = new DynamoEventStorage[Task, KK, S, E](schema)
+  val eventStore = new DynamoEventStorage[Task, KK, S, E](schema, runner, TaskToTask)
 }
 
 object DirectoryIdListUserSnapshotStorage extends MemorySingleSnapshotStorage[Task, DirectoryEventStream.DirectoryId, TwoPartSequence, List[User]]
