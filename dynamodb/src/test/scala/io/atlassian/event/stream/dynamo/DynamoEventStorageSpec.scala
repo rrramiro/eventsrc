@@ -10,7 +10,6 @@ import org.joda.time.{ DateTime, DateTimeZone }
 import org.junit.runner.RunWith
 import org.scalacheck.Prop
 import org.specs2.main.Arguments
-import org.specs2.specification.Step
 
 import scalaz._
 import scalaz.concurrent.Task
@@ -55,7 +54,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
   lazy val runner: DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
-        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException(i)) }, { a => Task.now(a) })
+        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
     }
 
   object DBEventStorage extends DynamoEventStorage[Task, KK, S, E](DynamoMappings.tableDefinition, runner, TaskToTask)
@@ -77,15 +76,15 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
   def is = stopOnFail ^ s2"""
     This is a specification to check the DynamoDB event storage
 
-    DynamoEventStorage should                   ${Step(startLocalDynamoDB)} ${Step(createTestTable)}
+    DynamoEventStorage should                            ${step(startLocalDynamoDB)} ${step(createTestTable)}
        correctly put an event                            ${putEventWorks.set(minTestsOk = NUM_TESTS)}
        return error when saving a duplicate event        ${eventReturnsErrorForDuplicateEvent.set(minTestsOk = NUM_TESTS)}
        return the correct number of events (no paging)   ${nonPagingGetWorks.set(minTestsOk = NUM_TESTS)}
        return the correct number of events (with paging) ${if (IS_LOCAL) pagingGetWorks.set(minTestsOk = 1) else skipped("SKIPPED - not run in AWS integration mode because it is slow")}
        return the correct number of events when a 'from sequence' is specified ${getFromWorks.set(minTestsOk = NUM_TESTS)}
 
-                                                  ${Step(deleteTestTable)}
-                                                  ${Step(stopLocalDynamoDB)}
+                                                         ${step(deleteTestTable)}
+                                                         ${step(stopLocalDynamoDB)}
 
   """
 

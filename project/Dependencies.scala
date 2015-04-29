@@ -3,67 +3,79 @@ import Keys._
 
 object Dependencies {
 
-  lazy val SCALAZ     = "7.1.1"
-  lazy val ARGONAUT   = "6.1-M6"
-  lazy val KADAI      = "3.1.1"
-  lazy val LOG4J      = "2.0.1"
-  lazy val AWS_SCALA  = "2.0.0-M5"
+  object Version {
+    val scalaz        = "7.1.1"
+    val scalazStream  = "0.7a"
+    val argonaut      = "6.1-M6"
+    val awsScala      = "2.0.0-M7"
+    val kadai         = "3.1.1"
+    val specs2        = "3.5-20150428120937-48c299f"
+    val scalacheck    = "1.12.2"
+    val junit         = "4.11"
+    val scodecBits    = "1.0.6"
+    val log4j         = "2.0.1"
+    val nscalaTime    = "2.0.0"
+    val healthCheck   = "1.1.0"
+    val dispatch      = "0.11.2"
+  }
 
   lazy val scalaz =
     Seq(
-      "org.scalaz"               %% "scalaz-core"       % SCALAZ
-    , "org.scalaz"               %% "scalaz-effect"     % SCALAZ
-    , "org.scalaz"               %% "scalaz-concurrent" % SCALAZ
-    , "org.scalaz.stream"        %% "scalaz-stream"     % "0.7a"
+      "org.scalaz"               %% "scalaz-core"       % Version.scalaz
+    , "org.scalaz"               %% "scalaz-effect"     % Version.scalaz
+    , "org.scalaz"               %% "scalaz-concurrent" % Version.scalaz
+    , "org.scalaz.stream"        %% "scalaz-stream"     % Version.scalazStream
     )
 
   lazy val log4j =
     Seq(
-      "org.apache.logging.log4j" % "log4j-api"          % LOG4J
-    , "org.apache.logging.log4j" % "log4j-core"         % LOG4J
-    , "org.apache.logging.log4j" % "log4j-core"         % LOG4J % "test"
+      "org.apache.logging.log4j" % "log4j-api"          % Version.log4j
+    , "org.apache.logging.log4j" % "log4j-core"         % Version.log4j
+    , "org.apache.logging.log4j" % "log4j-core"         % Version.log4j % "test"
     )
 
   lazy val kadai =
     Seq(
-      "io.atlassian"             %% "kadai-core"      % KADAI
+      "io.atlassian"             %% "kadai-core"      % Version.kadai
     ) ++ log4j
 
 
   lazy val test =
     Seq(
-      "org.specs2"               %% "specs2"       % "2.4.9"       % "test"
-    , "org.scalacheck"           %% "scalacheck"   % "1.11.6"      % "test"
-    , "junit"                     %  "junit"       % "4.11"        % "test"
+      "org.specs2"          %% "specs2-core"        % Version.specs2      % "test"
+    , "org.specs2"          %% "specs2-junit"       % Version.specs2      % "test"
+    , "org.specs2"          %% "specs2-scalacheck"  % Version.specs2      % "test"
+    , "org.scalacheck"      %% "scalacheck"         % Version.scalacheck  % "test"
+    , "junit"               %  "junit"              % Version.junit       % "test"
     )
 
   lazy val common = scalaz ++ kadai ++ test
 
   lazy val dispatch =
     Seq(
-      "net.databinder.dispatch" %% "dispatch-core" % "0.11.2"
+      "net.databinder.dispatch" %% "dispatch-core" % Version.dispatch
     )
 
   lazy val healthcheck = 
     Seq(
-      "io.atlassian.health" %% "healthcheck-core"  % "1.0.0"
+      "io.atlassian.health" %% "healthcheck-core"  % Version.healthCheck
     )
 
   lazy val dynamodb =
     Seq(
-      "io.atlassian.aws-scala" %% "aws-scala-core"     % AWS_SCALA
-    , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % AWS_SCALA
-    , "io.atlassian.aws-scala" %% "aws-scala-core"     % AWS_SCALA  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
-    , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % AWS_SCALA  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
+      "io.atlassian.aws-scala" %% "aws-scala-core"     % Version.awsScala
+    , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % Version.awsScala
+    , "io.atlassian.aws-scala" %% "aws-scala-core"     % Version.awsScala  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
+    , "io.atlassian.aws-scala" %% "aws-scala-dynamodb" % Version.awsScala  % "test" classifier "tests" exclude("org.scalatest", "scalatest_2.10")
     )
 
   lazy val argonaut =
     Seq(
-      "io.argonaut" %% "argonaut" % ARGONAUT
+      "io.argonaut" %% "argonaut" % Version.argonaut
     )
 
   lazy val nscalatime =
     Seq(
-      "com.github.nscala-time" %% "nscala-time" % "1.8.0"
+      "com.github.nscala-time" %% "nscala-time" % Version.nscalaTime
     )
 }

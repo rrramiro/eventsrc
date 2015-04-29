@@ -7,7 +7,6 @@ import io.atlassian.aws.dynamodb._
 import org.joda.time.DateTime
 import org.scalacheck.Prop
 import org.specs2.main.Arguments
-import org.specs2.specification.Step
 
 import scalaz._
 import scalaz.concurrent.Task
@@ -22,12 +21,12 @@ class DynamoSingleSnapshotStorageSpec(val arguments: Arguments) extends ScalaChe
   def is = stopOnFail ^ s2"""
     This is a specification to check the DynamoDB single snapshot storage
 
-    DynamoSingleSnapshotStorage should                   ${Step(startLocalDynamoDB)} ${Step(createTestTable)}
+    DynamoSingleSnapshotStorage should                   ${step(startLocalDynamoDB)} ${step(createTestTable)}
        return no snapshot when there is no snapshot      ${getNoSnapshot.set(minTestsOk = NUM_TESTS)}
        get what was saved                                ${getWhatWasPut.set(minTestsOk = NUM_TESTS)}
 
-                                                  ${Step(deleteTestTable)}
-                                                  ${Step(stopLocalDynamoDB)}
+                                                         ${step(deleteTestTable)}
+                                                         ${step(stopLocalDynamoDB)}
 
   """
   type KK = String
@@ -52,7 +51,7 @@ class DynamoSingleSnapshotStorageSpec(val arguments: Arguments) extends ScalaChe
   implicit lazy val runner: DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
-        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException(i)) }, { a => Task.now(a) })
+        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
     }
 
   def getNoSnapshot = Prop.forAll { (nonEmptyKey: UniqueString) =>
