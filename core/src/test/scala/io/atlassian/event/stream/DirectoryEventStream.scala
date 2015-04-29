@@ -3,9 +3,9 @@ package stream
 
 import argonaut._, Argonaut._
 import org.scalacheck.Arbitrary._
-import org.scalacheck.{Gen, Arbitrary}
+import org.scalacheck.{ Gen, Arbitrary }
 
-import scalaz.{@@, \/}
+import scalaz.{ @@, \/ }
 import scalaz.concurrent.Task
 import scalaz.syntax.either._
 
@@ -140,7 +140,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
   object AllUsersQueryAPIWithNoSnapshots extends AllUsersQueryAPI(SnapshotStorage.none)
 
   class AllUsersQueryAPIWithSnapshotPersistence(snapshotStore: SnapshotStorage[Task, DirectoryId, S, List[User]])
-    extends AllUsersQueryAPI(snapshotStore) {
+      extends AllUsersQueryAPI(snapshotStore) {
     override val runPersistSnapshot: Task[SnapshotStorage.Error \/ Snapshot[K, S, V]] => Unit =
       _.run.fold(e => throw new RuntimeException(e.toString), _ => ())
   }

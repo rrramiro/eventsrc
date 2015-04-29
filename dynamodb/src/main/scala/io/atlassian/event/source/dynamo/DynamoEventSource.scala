@@ -23,17 +23,16 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
   }
 
   abstract class DAO[F[_]](awsClient: DynamoClient, tableDef: TableDefinition[KK, VV, KK, S])(
-    implicit M: Monad[F],
-    C: Catchable[F],
-    runAction: DynamoDBAction ~> Task,
-    ToF: Task ~> F) extends Storage[F] {
+      implicit M: Monad[F],
+      C: Catchable[F],
+      runAction: DynamoDBAction ~> Task,
+      ToF: Task ~> F) extends Storage[F] {
 
     object Columns {
       implicit val transformOpDecoder: Decoder[Transform.Op] =
         Decoder[String].collect(Function.unlift(Transform.Op.unapply))
       implicit val transformOpEncoder: Encoder[Transform.Op] =
         Encoder[String].contramap(Transform.Op.apply)
-
 
       val eventId = Column.compose2[EventId](tableDef.hash, tableDef.range) { case EventId(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
       val lastModified = Column[DateTime]("LastModifiedTimestamp")
@@ -83,7 +82,8 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
         await(pt) { page =>
           emitAll(page.result) ++ {
             page.next.fold(halt: Process[Task, Event]) { seq =>
-              loop(requestPage(table.Query.range(key, seq, Comparison.Gt))) }
+              loop(requestPage(table.Query.range(key, seq, Comparison.Gt)))
+            }
           }
         }
 

@@ -1,7 +1,7 @@
 package io.atlassian.event.stream.memory
 
 import io.atlassian.event.Sequence
-import io.atlassian.event.stream.{Event, EventStorage, EventStream}
+import io.atlassian.event.stream.{ Event, EventStorage, EventStream }
 
 import scalaz.\/
 import scalaz.concurrent.Task

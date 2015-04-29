@@ -10,7 +10,7 @@ import org.specs2.specification.Step
 import scalaz.std.anyVal._
 import scalaz.concurrent.Task
 import org.scalacheck.Prop
-import org.joda.time.{DateTimeZone, DateTime}
+import org.joda.time.{ DateTimeZone, DateTime }
 import scalaz._
 import EventSource.Error.DuplicateEvent
 
@@ -85,7 +85,7 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
       }
       eventStore.get(key).runFoldMap { _ => 1 }.attemptRun match {
         case \/-(count) => count === 150
-        case _          => ko
+        case _ => ko
       }
 
     }
@@ -105,10 +105,10 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
       val r: Task[Int] = eventStore.get(key).runFoldMap { _ => 1 }
       (r.attemptRun match {
         case \/-(eventCount) => eventCount === 3
-        case _               => ko
+        case _ => ko
       }) and (eventSourceApi.get(key).attemptRun match {
         case \/-(saved) => saved === Some(v3)
-        case _          => ko
+        case _ => ko
       })
     }
 
@@ -131,7 +131,7 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
         result <- eventStore.put(event)
       } yield result).attemptRun match {
         case \/-(-\/(e)) => e === DuplicateEvent
-        case _           => ko
+        case _ => ko
       }
     }
 

@@ -22,9 +22,9 @@ sealed trait Snapshot[K, S, V] {
 
   def fold[X](none: => X, value: (V, S, DateTime) => X, deleted: (S, DateTime) => X): X =
     this match {
-      case NoSnapshot()        => none
+      case NoSnapshot() => none
       case Value(v, seq, time) => value(v, seq, time)
-      case Deleted(seq, time)  => deleted(seq, time)
+      case Deleted(seq, time) => deleted(seq, time)
     }
 }
 

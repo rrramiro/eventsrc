@@ -2,7 +2,7 @@ package io.atlassian.event.stream.dynamo
 
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
 import io.atlassian.aws.dynamodb._
-import io.atlassian.event.stream.{Event, EventId, EventStorage, EventStream}
+import io.atlassian.event.stream.{ Event, EventId, EventStorage, EventStream }
 import org.joda.time.DateTime
 
 import scalaz._
@@ -23,18 +23,18 @@ import scalaz.syntax.monad._
  * @tparam F Container around operations on an underlying data store e.g. Task.
  */
 class DynamoEventStorage[F[_], KK, S, E](
-  tableDef: TableDefinition[KK, E, KK, S],
-  runAction: DynamoDBAction ~> Task,
-  ToF: Task ~> F)(
-  implicit M: Monad[F],
-  C: Catchable[F]) extends EventStorage[F, KK, S, E] {
+    tableDef: TableDefinition[KK, E, KK, S],
+    runAction: DynamoDBAction ~> Task,
+    ToF: Task ~> F)(
+        implicit M: Monad[F],
+        C: Catchable[F]) extends EventStorage[F, KK, S, E] {
 
-  private[dynamo] type EID = EventId[KK, S]
+  private[dynamo]type EID = EventId[KK, S]
   private[dynamo] object EID {
     def apply(k: KK, s: S): EID = EventId[KK, S](k, s)
     def unapply(e: EID): Option[(KK, S)] = EventId.unapply[KK, S](e)
   }
-  private[dynamo] type EV = Event[KK, S, E]
+  private[dynamo]type EV = Event[KK, S, E]
 
   private object table extends Table {
     type K = EID
@@ -61,7 +61,7 @@ class DynamoEventStorage[F[_], KK, S, E](
 
   lazy val schema =
     TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)(tableDef.hash.decoder, tableDef.range.decoder)
-  
+
   override def get(key: KK, fromSeq: Option[S]): Process[F, Event[KK, S, E]] = {
     import Process._
 
@@ -75,7 +75,8 @@ class DynamoEventStorage[F[_], KK, S, E](
       await(pt) { page =>
         emitAll(page.result) ++ {
           page.next.fold(halt: Process[Task, EV]) { seq =>
-            loop(requestPage(table.Query.range(key, seq, Comparison.Gt))) }
+            loop(requestPage(table.Query.range(key, seq, Comparison.Gt)))
+          }
         }
       }
 

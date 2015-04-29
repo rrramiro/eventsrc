@@ -15,13 +15,13 @@ sealed trait Transform[+A] {
   def value: Option[A] =
     this match {
       case Insert(a) => a.some
-      case Delete    => none
+      case Delete => none
     }
 
   def map[B](f: A => B) =
     this match {
       case Insert(a) => Insert(f(a))
-      case Delete    => Delete
+      case Delete => Delete
     }
 }
 
@@ -46,7 +46,7 @@ object Transform {
       s.toLowerCase match {
         case "insert" => Some(Insert)
         case "delete" => Some(Delete)
-        case _        => None
+        case _ => None
       }
 
     def apply(op: Op): String =

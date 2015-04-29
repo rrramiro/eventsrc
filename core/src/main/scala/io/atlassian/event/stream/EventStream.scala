@@ -73,7 +73,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
    * Consumers can query by a `Key` type that needs to be transformable to the underlying event stream's `K` key type.
    * Implementations contain logic for calculating a snapshot given a series of events, key transform, and
    * override `runPersistSnapshot` to control how snapshots are persisted.
-   * 
+   *
    * @tparam Key type for the aggregate (may be different from the key for the event stream)
    * @tparam Val Aggregate type
    */
@@ -100,7 +100,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      * Wraps output from `generateLatestSnapshot` which is both the latest snapshot and what was previously persisted.
      */
     protected case class LatestSnapshotResult(latest: Snapshot[K, S, V], previousPersisted: Snapshot[K, S, V])
-    
+
     /**
      * Return the current view of the data for key 'key'
      */
@@ -164,8 +164,8 @@ abstract class EventStream[F[_]: Monad: Catchable] {
         startingSnapshot <- generateSnapshotAt(key, from)
       } yield eventStore.get(eventStreamKey(key), startingSnapshot.seq)
         .scan[Snapshot[K, S, V]](startingSnapshot) {
-        case (view, event) => acc(key)(view, event)
-      }.drop(1)
+          case (view, event) => acc(key)(view, event)
+        }.drop(1)
 
     /**
      * Return the view of the data for the key 'key' at the specified timestamp.
@@ -189,8 +189,8 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      * @return Container F that when executed provides the snapshot.
      */
     private def snapshotFold(start: Snapshot[K, S, V],
-                             events: Process[F, Event[KK, S, E]],
-                             f: (Snapshot[K, S, V], Event[KK, S, E]) => Snapshot[K, S, V]): F[Snapshot[K, S, V]] =
+      events: Process[F, Event[KK, S, E]],
+      f: (Snapshot[K, S, V], Event[KK, S, E]) => Snapshot[K, S, V]): F[Snapshot[K, S, V]] =
       events.pipe {
         process1.fold(start)(f)
       }.runLastOr(start)

@@ -1,5 +1,7 @@
 import sbt._, Keys._
 import sbtrelease.ReleasePlugin._
+import com.typesafe.sbt.SbtScalariform._
+import wartremover._
 
 object Settings {
   val scalacFlags =  Seq(
@@ -25,6 +27,8 @@ object Settings {
   lazy val standardSettings = 
     Defaults.coreDefaultSettings ++ 
     releaseSettings ++ // sbt-release
+    wartRemoval ++
+    defaultScalariformSettings ++
     net.virtualvoid.sbt.graph.Plugin.graphSettings ++ // dependency plugin settings 
     Seq[Def.Setting[_]] (
       organization := "io.atlassian"
@@ -48,5 +52,22 @@ object Settings {
       )
     , credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
     , addCompilerPlugin("org.scalamacros"        % "paradise"       % "2.0.1" cross CrossVersion.full)
+    )
+
+
+  lazy val wartRemoval =
+    wartremoverSettings ++ Seq(
+      wartremoverErrors in (Compile, compile) ++=
+        Warts.allBut(
+          Wart.Any
+          , Wart.DefaultArguments
+          , Wart.NoNeedForMonad
+          , Wart.NonUnitStatements
+          , Wart.Nothing
+          , Wart.Throw
+          , Wart.Product
+          , Wart.Serializable
+        )
+      , wartremoverExcluded ++= Seq()
     )
 }

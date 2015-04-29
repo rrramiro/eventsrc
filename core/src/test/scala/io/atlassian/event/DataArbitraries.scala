@@ -1,7 +1,7 @@
 package io.atlassian.event
 
 import org.scalacheck.Arbitrary._
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.{ Arbitrary, Gen }
 
 import scalaz._
 

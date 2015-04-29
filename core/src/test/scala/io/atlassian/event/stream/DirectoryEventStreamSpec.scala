@@ -3,7 +3,7 @@ package stream
 
 import io.atlassian.event.stream.EventStream.QueryConsistency
 import org.scalacheck.Prop
-import org.specs2.{ScalaCheck, SpecificationWithJUnit}
+import org.specs2.{ ScalaCheck, SpecificationWithJUnit }
 
 import scalaz.concurrent.Task
 
@@ -74,9 +74,7 @@ abstract class DirectoryEventStreamSpec extends SpecificationWithJUnit with Scal
     }
   }
 
-  private def testDuplicateUsername(e: DirectoryEventStream)
-                                   (queryApi: e.QueryAPI[DirectoryId, List[User]])
-                                   (k: DirectoryId, u1: User, u2: User) = {
+  private def testDuplicateUsername(e: DirectoryEventStream)(queryApi: e.QueryAPI[DirectoryId, List[User]])(k: DirectoryId, u1: User, u2: User) = {
     val saveApi = new e.AllUsersSaveAPI(queryApi)
 
     val user2ToSave = u2.copy(username = u1.username)
@@ -99,9 +97,7 @@ abstract class DirectoryEventStreamSpec extends SpecificationWithJUnit with Scal
     testDuplicateUsernameSharded(events)(api)(k, u1, u2)
   }
 
-  def testDuplicateUsernameSharded(e: DirectoryEventStream)
-                                  (queryApi: e.QueryAPI[DirectoryUsername, UserId])
-                                  (k: DirectoryId, u1: User, u2: User) = {
+  def testDuplicateUsernameSharded(e: DirectoryEventStream)(queryApi: e.QueryAPI[DirectoryUsername, UserId])(k: DirectoryId, u1: User, u2: User) = {
     val api1 = new e.AllUsersQueryAPI(allUserSnapshot)
     val saveApi = new e.SaveAPI[DirectoryUsername, UserId](queryApi)
 

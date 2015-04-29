@@ -23,7 +23,7 @@ class MemoryEventSource extends LongSequencedEventSource[Int, String] {
     object store extends Storage[Task] {
       override def get(key: Int, seq: Option[Long]): Process[Task, Event] =
         map.get(key) match {
-          case None     => Process.halt
+          case None => Process.halt
           case Some(cs) => Process.emitAll(cs.reverse.takeWhile { ev => seq.fold(true) { _ >= ev.id.sequence } })
         }
 

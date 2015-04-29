@@ -1,0 +1,20 @@
+#!/bin/bash
+
+run_sbt=false
+for file in $(git diff-index --name-only --cached HEAD) ; do
+    if [[ $file == *.scala ]] ; then
+        run_sbt=true
+        break
+    fi
+done
+
+if [ "$run_sbt" = false ] ; then
+    exit 
+fi
+
+echo "Scalariforming..."
+if test $(./sbt ";scalariformFormat;test:scalariformFormat" | grep -c -E "Reformatted|Failed") != 0
+then
+    echo "Adding scalariformed files..."
+    git add -u
+fi

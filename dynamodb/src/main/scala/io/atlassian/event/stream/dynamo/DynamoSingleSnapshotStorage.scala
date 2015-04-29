@@ -5,7 +5,7 @@ package dynamo
 import io.atlassian.aws.dynamodb._
 import org.joda.time.DateTime
 
-import scalaz.{ ~>, Monad, \/ }
+import scalaz.{ Applicative, ~>, \/ }
 import scalaz.syntax.either._
 import scalaz.syntax.std.option._
 import scalaz.std.option._
@@ -15,9 +15,8 @@ import scalaz.syntax.monad._
  * Basic implementation of snapshot storage using Dynamo for persistence. It stores only a single snapshot
  * that is overwritten over time.
  */
-class DynamoSingleSnapshotStorage[F[_]: Monad, KK, S, VV](tableDef: TableDefinition[KK, VV, KK, S])
-                                                         (implicit runAction: DynamoDBAction ~> F)
-  extends SnapshotStorage[F, KK, S, VV] {
+class DynamoSingleSnapshotStorage[F[_]: Applicative, KK, S, VV](tableDef: TableDefinition[KK, VV, KK, S])(implicit runAction: DynamoDBAction ~> F)
+    extends SnapshotStorage[F, KK, S, VV] {
 
   private[dynamo] case class WrappedKey(key: KK, dummy: String = "")
 
