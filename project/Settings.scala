@@ -40,11 +40,14 @@ object Settings {
     , scalacOptions ++= scalacFlags 
     , javacOptions ++= Seq("-encoding", "UTF-8")
     , resolvers ++= Seq(
-        Resolver.mavenLocal
-      , "Tools Snapshots"    at "http://oss.sonatype.org/content/repositories/snapshots"
-      , "Tools Releases"     at "http://oss.sonatype.org/content/repositories/releases"
+        Resolver.defaultLocal
+      , Resolver.mavenLocal
       , "atlassian-public"   at "https://maven.atlassian.com/content/groups/atlassian-public/"
       , "atlassian-internal" at "https://maven.atlassian.com/content/groups/internal/"
+      , Resolver.sonatypeRepo("public")
+      , Resolver.sonatypeRepo("releases")
+      , Resolver.sonatypeRepo("snapshots")
+      , Resolver.bintrayRepo("non", "maven")
       )
     , mappings in (Compile, packageBin) ++= Seq(
         file("LICENSE") -> "META-INF/LICENSE"

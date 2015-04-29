@@ -8,7 +8,6 @@ import io.atlassian.aws.dynamodb._
 import io.atlassian.event.stream.memory.MemorySingleSnapshotStorage
 import kadai.Attempt
 import org.specs2.main.Arguments
-import org.specs2.specification.Step
 import scodec.bits.ByteVector
 
 import scalaz._
@@ -18,7 +17,7 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
 
   override def is =
     s2"""
-        DirectoryEventStream supports                               ${Step(startLocalDynamoDB)} ${Step(createTestTable)}
+        DirectoryEventStream supports                               ${step(startLocalDynamoDB)} ${step(createTestTable)}
           Adding multiple users (store list of users)               ${addMultipleUsers.set(minTestsOk = NUM_TESTS)}
           Checking for duplicate usernames (store list of users)    ${duplicateUsername.set(minTestsOk = NUM_TESTS)}
           Adding multiple users (store list of users and snapshot)  ${addMultipleUsersWithSnapshot.set(minTestsOk = NUM_TESTS)}
@@ -27,8 +26,8 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
           Checking for duplicate usernames with sharded store       ${duplicateUsernameSharded.set(minTestsOk = NUM_TESTS)}
           Checking for duplicate usernames with sharded store and snapshot ${duplicateUsernameShardedWithSnapshot.set(minTestsOk = NUM_TESTS)}
 
-                                                                    ${Step(deleteTestTable)}
-                                                                    ${Step(stopLocalDynamoDB)}
+                                                                    ${step(deleteTestTable)}
+                                                                    ${step(stopLocalDynamoDB)}
       """
   implicit val DYNAMO_CLIENT = dynamoClient
 
@@ -39,7 +38,7 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
   lazy val runner: DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
-        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException(i)) }, { a => Task.now(a) })
+        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
     }
 
   def createTestTable() =

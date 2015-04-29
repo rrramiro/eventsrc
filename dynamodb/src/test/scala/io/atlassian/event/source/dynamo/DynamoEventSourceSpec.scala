@@ -6,7 +6,6 @@ import io.atlassian.aws.WrappedInvalidException
 import org.junit.runner.RunWith
 import org.specs2.main.Arguments
 import io.atlassian.aws.dynamodb._
-import org.specs2.specification.Step
 import scalaz.std.anyVal._
 import scalaz.concurrent.Task
 import org.scalacheck.Prop
@@ -43,7 +42,7 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
   implicit lazy val runner: DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
-        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException(i)) }, { a => Task.now(a) })
+        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
     }
 
   implicit val JodaDateTimeEqual: Equal[DateTime] =
@@ -63,14 +62,14 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
   def is = stopOnFail ^ s2"""
     This is a specification to check the DynamoDB event source for blob mappings
 
-    DynamoEventSource.Events should                   ${Step(startLocalDynamoDB)} ${Step(createTestTable)}
+    DynamoEventSource.Events should                      ${step(startLocalDynamoDB)} ${step(createTestTable)}
        correctly put an event                            ${putEventWorks.set(minTestsOk = NUM_TESTS)}
        return error when saving a duplicate event        ${eventReturnsErrorForDuplicateEvent.set(minTestsOk = NUM_TESTS)}
        return the correct number of events (no paging)   ${nonPagingGetWorks.set(minTestsOk = NUM_TESTS)}
        return the correct number of events (with paging) ${if (IS_LOCAL) pagingGetWorks.set(minTestsOk = 1) else skipped("SKIPPED - not run in AWS integration mode because it is slow")}
 
-                                                  ${Step(deleteTestTable)}
-                                                  ${Step(stopLocalDynamoDB)}
+                                                         ${step(deleteTestTable)}
+                                                         ${step(stopLocalDynamoDB)}
 
   """
 
