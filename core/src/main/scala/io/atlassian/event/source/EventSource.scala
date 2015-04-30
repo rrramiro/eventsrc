@@ -121,7 +121,7 @@ trait EventSource[K, V, S] {
     /**
      * There is no snapshot... i.e. no events have been saved.
      */
-    case class NoSnapshot() extends Snapshot {
+    private[source] case class NoSnapshot() extends Snapshot {
       val value = None
     }
 
@@ -131,7 +131,7 @@ trait EventSource[K, V, S] {
      * @param at identifier
      * @param time timestamp of the last event.
      */
-    case class Value(view: V, at: EventId, time: DateTime) extends Snapshot {
+    private[source] case class Value(view: V, at: EventId, time: DateTime) extends Snapshot {
       val value = Some(view)
     }
 
@@ -140,7 +140,7 @@ trait EventSource[K, V, S] {
      * @param at identifier
      * @param time timestamp of the last event.
      */
-    case class Deleted(at: EventId, time: DateTime) extends Snapshot {
+    private[source] case class Deleted(at: EventId, time: DateTime) extends Snapshot {
       val value = None
     }
 
