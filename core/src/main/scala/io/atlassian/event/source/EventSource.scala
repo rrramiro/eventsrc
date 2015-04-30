@@ -7,7 +7,6 @@ import scalaz.{ -\/, Catchable, Monad, NonEmptyList, \/, \/- }
 import scalaz.stream.{ Process, process1 }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
-import scalaz.syntax.std.option._
 
 /**
  * An event source is an append-only store of data. Data is represented as a series of events that when replayed in
@@ -104,7 +103,7 @@ trait EventSource[K, V, S] {
    *
    * This is only used internally within an event source.
    */
-  private[source] sealed trait Snapshot {
+  sealed trait Snapshot {
     import Snapshot._
     def value: Option[V]
     def id: Option[EventId] =
@@ -118,28 +117,30 @@ trait EventSource[K, V, S] {
       }
   }
 
-  private[source] object Snapshot {
+  object Snapshot {
     /**
      * There is no snapshot... i.e. no events have been saved.
      */
-    case class NoSnapshot() extends Snapshot {
+    private[source] case class NoSnapshot() extends Snapshot {
       val value = None
     }
 
     /**
      * Events have been saved and there is a value stored.
      * @param view The value
-     * @param at
+     * @param at identifier
+     * @param time timestamp of the last event.
      */
-    case class Value(view: V, at: EventId, time: DateTime) extends Snapshot {
+    private[source] case class Value(view: V, at: EventId, time: DateTime) extends Snapshot {
       val value = Some(view)
     }
 
     /**
      * Events have been saved and there is no value (i.e. the value has been deleted).
-     * @param at
+     * @param at identifier
+     * @param time timestamp of the last event.
      */
-    case class Deleted(at: EventId, time: DateTime) extends Snapshot {
+    private[source] case class Deleted(at: EventId, time: DateTime) extends Snapshot {
       val value = None
     }
 
