@@ -63,7 +63,7 @@ abstract class DirectoryEventStreamSpec extends SpecificationWithJUnit with Scal
         _ <- saveApi.save(k, ops.addUniqueUser(eventStream)(u1))
         snapshotUser1 <- api.get(k, QueryConsistency.LatestSnapshot)
         savedUser2 <- saveApi.save(k, ops.addUniqueUser(eventStream)(u2))
-        seq = savedUser2.fold(_.seq, _ => None, None)
+        seq = savedUser2.fold(_.seq, _ => None, _ => None)
         snapshotUser2 <- api.get(k, QueryConsistency.LatestSnapshot)
         allUsers <- api.get(k)
       } yield (allUsers, snapshotUser1, snapshotUser2)).run

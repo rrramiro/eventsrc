@@ -263,7 +263,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
           case -\/(Error.DuplicateEvent) =>
             save(key, operation)
           case -\/(Error.Noop) =>
-            SaveResult.noop[K, S, V]().point[F]
+            SaveResult.noop[K, S, V](old.latest).point[F]
           case -\/(Error.Rejected(r)) =>
             SaveResult.reject[K, S, V](r).point[F]
           case \/-(event) =>
