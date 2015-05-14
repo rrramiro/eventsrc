@@ -61,5 +61,13 @@ object Snapshot {
 
   def deleted[K, S, V]: (S, DateTime) => Snapshot[K, S, V] =
     (seq: S, time: DateTime) => Deleted(seq, time)
+
+  def noop[K, S, V](old: Snapshot[K, S, V]): (S, DateTime) => Snapshot[K, S, V] =
+    (seq: S, time: DateTime) =>
+      old.fold(
+        deleted[K, S, V],
+        { case (v, _, _) => value[K, S, V](v) },
+        { case (_, _) => deleted[K, S, V] }
+      )(seq, time)
 }
 

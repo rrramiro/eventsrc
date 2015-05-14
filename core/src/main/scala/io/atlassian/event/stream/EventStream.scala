@@ -164,7 +164,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
         startingSnapshot <- generateSnapshotAt(key, from)
       } yield eventStore.get(eventStreamKey(key), startingSnapshot.seq)
         .scan[Snapshot[K, S, V]](startingSnapshot) {
-          case (view, event) => acc(key)(view, event)
+          acc(key)
         }.drop(1)
 
     /**
