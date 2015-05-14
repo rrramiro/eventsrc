@@ -2,7 +2,8 @@ package io.atlassian.event
 package source
 package dynamo
 
-import com.amazonaws.services.dynamodbv2.{ AmazonDynamoDBClient => DynamoClient }
+import com.amazonaws.services.dynamodbv2.{ AmazonDynamoDB => DynamoClient }
+import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
 
 import io.atlassian.aws.dynamodb._
@@ -22,7 +23,9 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
     type R = S
   }
 
-  abstract class DAO[F[_]](awsClient: DynamoClient, tableDef: TableDefinition[KK, VV, KK, S])(
+  case class DAOConfig(queryConsistency: ReadConsistency = ReadConsistency.Eventual)
+
+  abstract class DAO[F[_]](awsClient: DynamoClient, tableDef: TableDefinition[KK, VV, KK, S], config: DAOConfig = DAOConfig())(
       implicit M: Monad[F],
       C: Catchable[F],
       runAction: DynamoDBAction ~> Task,
@@ -90,9 +93,9 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
       loop {
         requestPage {
           fromSeq.fold {
-            table.Query.hash(key)
+            table.Query.hash(key, table.Query.Config(consistency = config.queryConsistency))
           } {
-            seq => table.Query.range(key, seq, Comparison.Gte)
+            seq => table.Query.range(key, seq, Comparison.Gte, table.Query.Config(consistency = config.queryConsistency))
           }
         }
       }.translate(ToF)

@@ -7,7 +7,7 @@ object Dependencies {
     val scalaz        = "7.1.1"
     val scalazStream  = "0.7a"
     val argonaut      = "6.1"
-    val awsScala      = "2.0.0-M7"
+    val awsScala      = "2.0.0-M9"
     val kadai         = "3.2.1"
     val specs2        = "3.6"
     val scalacheck    = "1.12.2"
