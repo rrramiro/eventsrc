@@ -89,7 +89,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      * @param e Event to add to previous view
      * @return New view with event added.
      */
-    private[stream] def acc(key: K)(v: Snapshot[K, S, V], e: Event[KK, S, E]): Snapshot[K, S, V]
+    private[stream] def acc(key: K)(v: Snapshot[S, V], e: Event[KK, S, E]): Snapshot[S, V]
 
     /**
      * Transform a given aggregate key to the key for the underlying event stream
@@ -99,7 +99,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
     /**
      * Wraps output from `generateLatestSnapshot` which is both the latest snapshot and what was previously persisted.
      */
-    protected case class LatestSnapshotResult(latest: Snapshot[K, S, V], previousPersisted: Snapshot[K, S, V])
+    protected case class LatestSnapshotResult(latest: Snapshot[S, V], previousPersisted: Snapshot[S, V])
 
     /**
      * Return the current view of the data for key 'key'
@@ -110,7 +110,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
     /**
      * @return the current view wrapped in Snapshot of the data for key 'key'
      */
-    final def getSnapshot(key: K, consistency: QueryConsistency = QueryConsistency.LatestEvent): F[Snapshot[K, S, V]] =
+    final def getSnapshot(key: K, consistency: QueryConsistency = QueryConsistency.LatestEvent): F[Snapshot[S, V]] =
       consistency.fold(
         snapshotStore.get(key, SequenceQuery.latest[S]),
         for {
@@ -135,7 +135,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      * @param at If none, get me the latest. If some, get me the snapshot at that specific sequence.
      * @return A Snapshot for the aggregate at the given sequence number.
      */
-    private def generateSnapshotAt(key: K, at: Option[S]): F[Snapshot[K, S, V]] =
+    private def generateSnapshotAt(key: K, at: Option[S]): F[Snapshot[S, V]] =
       for {
         persistedSnapshot <- snapshotStore.get(key, at.fold(SequenceQuery.latest[S])(SequenceQuery.before))
         fromSeq = persistedSnapshot.seq
@@ -159,11 +159,11 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      * @param from Starting sequence number. None to get from the beginning of the stream.
      * @return a stream of Snapshots starting from sequence number 'from' (if defined).
      */
-    final def getHistory(key: K, from: Option[S]): F[Process[F, Snapshot[K, S, V]]] =
+    final def getHistory(key: K, from: Option[S]): F[Process[F, Snapshot[S, V]]] =
       for {
         startingSnapshot <- generateSnapshotAt(key, from)
       } yield eventStore.get(eventStreamKey(key), startingSnapshot.seq)
-        .scan[Snapshot[K, S, V]](startingSnapshot) {
+        .scan[Snapshot[S, V]](startingSnapshot) {
           acc(key)
         }.drop(1)
 
@@ -188,9 +188,9 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      * @param events The stream of events.
      * @return Container F that when executed provides the snapshot.
      */
-    private def snapshotFold(start: Snapshot[K, S, V],
+    private def snapshotFold(start: Snapshot[S, V],
       events: Process[F, Event[KK, S, E]],
-      f: (Snapshot[K, S, V], Event[KK, S, E]) => Snapshot[K, S, V]): F[Snapshot[K, S, V]] =
+      f: (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]): F[Snapshot[S, V]] =
       events.pipe {
         process1.fold(start)(f)
       }.runLastOr(start)
@@ -210,13 +210,13 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      *                     them!
      * @return Error when saving snapshot or the snapshot that was saved.
      */
-    final def forceRefreshPersistedSnapshot(key: K, forceStartAt: S): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
+    final def forceRefreshPersistedSnapshot(key: K, forceStartAt: S): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
       for {
         snapshotToSave <- snapshotFold(Snapshot.zero, eventStore.get(eventStreamKey(key), Some(forceStartAt)), acc(key))
         saveResult <- persistSnapshotOp(key, snapshotToSave, None)
       } yield saveResult
 
-    private final def persistSnapshotOp(key: K, snapshot: Snapshot[K, S, V], previousSnapshot: Option[Snapshot[K, S, V]]): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
+    private final def persistSnapshotOp(key: K, snapshot: Snapshot[S, V], previousSnapshot: Option[Snapshot[S, V]]): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
       if (snapshot.seq != previousSnapshot.map { _.seq })
         snapshotStore.put(key, snapshot, SnapshotStoreMode.Cache)
       else
@@ -225,14 +225,14 @@ abstract class EventStream[F[_]: Monad: Catchable] {
     /**
      * Override this to control how snapshot persistence happens (e.g. asynchronously, synchronously)
      */
-    protected def runPersistSnapshot: F[SnapshotStorage.Error \/ Snapshot[K, S, V]] => Unit =
+    protected def runPersistSnapshot: F[SnapshotStorage.Error \/ Snapshot[S, V]] => Unit =
       _ => ()
 
     /**
      * Save the given `snapshot` if it is at a different sequence number to `previousSnapshot`. Set `previousSnapshot`
      * to None to force a save.
      */
-    private[stream] def persistSnapshot(key: K, snapshot: Snapshot[K, S, V], previousSnapshot: Option[Snapshot[K, S, V]]): Unit =
+    private[stream] def persistSnapshot(key: K, snapshot: Snapshot[S, V], previousSnapshot: Option[Snapshot[S, V]]): Unit =
       persistSnapshotOp(key, snapshot, previousSnapshot) |> runPersistSnapshot
   }
 
@@ -250,7 +250,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
 
     import aggregator._
 
-    final def save(key: K, operation: Operation[K, S, V, E]): F[SaveResult[K, S, V]] =
+    final def save(key: K, operation: Operation[S, V, E]): F[SaveResult[S, V]] =
       for {
         old <- generateLatestSnapshot(key)
         op = operation.run(old.latest)
@@ -263,14 +263,14 @@ abstract class EventStream[F[_]: Monad: Catchable] {
           case -\/(Error.DuplicateEvent) =>
             save(key, operation)
           case -\/(Error.Noop) =>
-            SaveResult.noop[K, S, V](old.latest).point[F]
+            SaveResult.noop[S, V](old.latest).point[F]
           case -\/(Error.Rejected(r)) =>
-            SaveResult.reject[K, S, V](r).point[F]
+            SaveResult.reject[S, V](r).point[F]
           case \/-(event) =>
             val newSnapshot = acc(key)(old.latest, event)
 
             for {
-              saveResult <- SaveResult.success[K, S, V](newSnapshot).point[F]
+              saveResult <- SaveResult.success[S, V](newSnapshot).point[F]
               _ = persistSnapshot(key, newSnapshot, old.previousPersisted.some)
             } yield saveResult
         }

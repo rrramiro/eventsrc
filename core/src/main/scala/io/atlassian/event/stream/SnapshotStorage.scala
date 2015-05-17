@@ -24,7 +24,7 @@ trait SnapshotStorage[F[_], K, S, V] {
    * @param sequence What sequence we want to get the snapshot for (earliest snapshot, latest, or latest before some sequence)
    * @return The snapshot, a NoSnapshot if there was no snapshot for the given conditions.
    */
-  def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[K, S, V]]
+  def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[S, V]]
 
   /**
    * Save a given snapshot
@@ -33,7 +33,7 @@ trait SnapshotStorage[F[_], K, S, V] {
    * @param mode Defines whether the given snapshot should be deemed the earliest point in the event stream (Epoch) or not (Cache)
    * @return Either a Throwable (for error) or the saved snapshot.
    */
-  def put(snapshotKey: K, snapshot: Snapshot[K, S, V], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[K, S, V]]
+  def put(snapshotKey: K, snapshot: Snapshot[S, V], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[S, V]]
 }
 
 /**
@@ -44,10 +44,10 @@ object SnapshotStorage {
     new NoSnapshotStorage
 
   private class NoSnapshotStorage[F[_]: Applicative, K, S, V] extends SnapshotStorage[F, K, S, V] {
-    def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[K, S, V]] =
-      Snapshot.zero[K, S, V].point[F]
+    def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[S, V]] =
+      Snapshot.zero[S, V].point[F]
 
-    def put(key: K, snapshot: Snapshot[K, S, V], mode: SnapshotStoreMode): F[Error \/ Snapshot[K, S, V]] =
+    def put(key: K, snapshot: Snapshot[S, V], mode: SnapshotStoreMode): F[Error \/ Snapshot[S, V]] =
       snapshot.right[Error].point[F]
   }
 

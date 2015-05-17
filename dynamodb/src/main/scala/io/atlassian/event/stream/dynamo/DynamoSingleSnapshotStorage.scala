@@ -22,7 +22,7 @@ class DynamoSingleSnapshotStorage[F[_]: Applicative, KK, S, VV](tableDef: TableD
 
   private[dynamo] object table extends Table {
     type K = WrappedKey
-    type V = Snapshot[KK, S, VV]
+    type V = Snapshot[S, VV]
     type H = KK
     type R = String
   }
@@ -46,12 +46,12 @@ class DynamoSingleSnapshotStorage[F[_]: Applicative, KK, S, VV](tableDef: TableD
     val snapshotDateTime = Column[DateTime]("created")
     val snapshotType = Column[SnapshotType]("type")
 
-    val value = Column.compose4[Snapshot[KK, S, VV]](snapshotType, tableDef.value.liftOption, tableDef.range.liftOption, snapshotDateTime.liftOption) {
+    val value = Column.compose4[Snapshot[S, VV]](snapshotType, tableDef.value.liftOption, tableDef.range.liftOption, snapshotDateTime.liftOption) {
       case Snapshot.NoSnapshot() => (NoSnapshot, None, None, None)
       case Snapshot.Deleted(s, t) => (Deleted, None, s.some, t.some)
       case Snapshot.Value(v, s, t) => (Value, v.some, s.some, t.some)
     } {
-      case (NoSnapshot, _, _, _) => Snapshot.zero[KK, S, VV]
+      case (NoSnapshot, _, _, _) => Snapshot.zero[S, VV]
       case (Deleted, _, Some(s), Some(t)) => Snapshot.deleted(s, t)
       case (Value, Some(v), Some(s), Some(t)) => Snapshot.value(v)(s, t)
       case _ => ???
@@ -65,13 +65,13 @@ class DynamoSingleSnapshotStorage[F[_]: Applicative, KK, S, VV](tableDef: TableD
     runAction compose
       table.transform(DynamoDB.interpreter(table)(tableDefinition))
 
-  override def get(key: KK, sequence: SequenceQuery[S]): F[Snapshot[KK, S, VV]] =
-    sequence.fold({ _ => Snapshot.zero[KK, S, VV].point[F] },
+  override def get(key: KK, sequence: SequenceQuery[S]): F[Snapshot[S, VV]] =
+    sequence.fold({ _ => Snapshot.zero[S, VV].point[F] },
       Snapshot.zero.point[F],
       interpret(table.get(WrappedKey(key))).map { _ | Snapshot.zero }
     )
 
-  override def put(snapshotKey: KK, snapshot: Snapshot[KK, S, VV], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[KK, S, VV]] =
+  override def put(snapshotKey: KK, snapshot: Snapshot[S, VV], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[S, VV]] =
     mode.fold(snapshot.right.point[F],
       interpret(table.put(WrappedKey(snapshotKey), snapshot)).map { _ => snapshot.right }
     )

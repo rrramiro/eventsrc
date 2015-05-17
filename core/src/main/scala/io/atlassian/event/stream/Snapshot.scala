@@ -12,7 +12,7 @@ import scalaz.\/
  *
  * @tparam V The type of the value wrapped by the Snapshot
  */
-sealed trait Snapshot[K, S, V] {
+sealed trait Snapshot[S, V] {
   import Snapshot._
 
   def value: Option[V]
@@ -32,7 +32,7 @@ object Snapshot {
   /**
    * There is no snapshot... i.e. no events have been saved.
    */
-  case class NoSnapshot[K, S, V]() extends Snapshot[K, S, V] {
+  case class NoSnapshot[S, V]() extends Snapshot[S, V] {
     val value = None
   }
 
@@ -41,7 +41,7 @@ object Snapshot {
    * @param view The value
    * @param s Represents the point in the stream that this Snapshot is for
    */
-  case class Value[K, S, V](view: V, s: S, time: DateTime) extends Snapshot[K, S, V] {
+  case class Value[S, V](view: V, s: S, time: DateTime) extends Snapshot[S, V] {
     val value = Some(view)
   }
 
@@ -49,25 +49,25 @@ object Snapshot {
    * Events have been saved and there is no value (i.e. the value has been deleted).
    * @param s Represents the point in the stream
    */
-  case class Deleted[K, S, V](s: S, time: DateTime) extends Snapshot[K, S, V] {
+  case class Deleted[S, V](s: S, time: DateTime) extends Snapshot[S, V] {
     val value = None
   }
 
-  def zero[K, S, V]: Snapshot[K, S, V] =
-    NoSnapshot[K, S, V]()
+  def zero[S, V]: Snapshot[S, V] =
+    NoSnapshot[S, V]()
 
-  def value[K, S, V](view: V): (S, DateTime) => Snapshot[K, S, V] =
+  def value[S, V](view: V): (S, DateTime) => Snapshot[S, V] =
     (seq: S, time: DateTime) => Value(view, seq, time)
 
-  def deleted[K, S, V]: (S, DateTime) => Snapshot[K, S, V] =
+  def deleted[S, V]: (S, DateTime) => Snapshot[S, V] =
     (seq: S, time: DateTime) => Deleted(seq, time)
 
-  def noop[K, S, V](old: Snapshot[K, S, V]): (S, DateTime) => Snapshot[K, S, V] =
+  def noop[K, S, V](old: Snapshot[S, V]): (S, DateTime) => Snapshot[S, V] =
     (seq: S, time: DateTime) =>
       old.fold(
-        deleted[K, S, V],
-        { case (v, _, _) => value[K, S, V](v) },
-        { case (_, _) => deleted[K, S, V] }
+        deleted[S, V],
+        { case (v, _, _) => value[S, V](v) },
+        { case (_, _) => deleted[S, V] }
       )(seq, time)
 }
 

@@ -14,9 +14,9 @@ object MemorySingleSnapshotStorage {
 }
 
 class MemorySingleSnapshotStorage[F[_], K, S, V](implicit A: Applicative[F]) extends SnapshotStorage[F, K, S, V] {
-  private val map = collection.concurrent.TrieMap[K, Snapshot[K, S, V]]()
+  private val map = collection.concurrent.TrieMap[K, Snapshot[S, V]]()
 
-  override def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[K, S, V]] =
+  override def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[S, V]] =
     A.point {
       sequence.fold(
         { _ => Snapshot.zero },
@@ -24,7 +24,7 @@ class MemorySingleSnapshotStorage[F[_], K, S, V](implicit A: Applicative[F]) ext
         map.getOrElse(key, Snapshot.zero))
     }
 
-  override def put(snapshotKey: K, snapshot: Snapshot[K, S, V], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[K, S, V]] =
+  override def put(snapshotKey: K, snapshot: Snapshot[S, V], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
     A.point {
       map += (snapshotKey -> snapshot)
       snapshot.right

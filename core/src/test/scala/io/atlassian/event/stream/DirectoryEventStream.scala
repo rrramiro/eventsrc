@@ -33,8 +33,8 @@ object DirectoryEventStream {
     import DataValidator._
     import Operation.syntax._
 
-    def addUniqueUser(events: DirectoryEventStream)(u: User): Operation[DirectoryId, events.S, List[User], events.E] =
-      DirectoryEvent.addUser(u).op[DirectoryId, events.S, List[User]].filter { noDuplicateUsername(u) }
+    def addUniqueUser(events: DirectoryEventStream)(u: User): Operation[events.S, List[User], events.E] =
+      DirectoryEvent.addUser(u).op[events.S, List[User]].filter { noDuplicateUsername(u) }
 
     private def noDuplicateUsername(u: User): DataValidator.Validator[List[User]] =
       ol =>
@@ -74,7 +74,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
   class ShardedUsernameQueryAPI extends QueryAPI[DirectoryUsername, UserId] {
     override def eventStreamKey = _._1
 
-    override def acc(key: DirectoryUsername)(v: Snapshot[DirectoryUsername, S, UserId], e: Event[KK, S, E]): Snapshot[DirectoryUsername, S, UserId] =
+    override def acc(key: DirectoryUsername)(v: Snapshot[S, UserId], e: Event[KK, S, E]): Snapshot[S, UserId] =
       e.operation match {
         case AddUser(user) =>
           if (key._2 == user.username)
@@ -84,22 +84,22 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
       }
 
     object snapshotStore extends SnapshotStorage[Task, DirectoryUsername, S, UserId] {
-      val map = collection.concurrent.TrieMap[DirectoryUsernamePrefix, Snapshot[DirectoryUsername, S, Map[Username, UserId]]]()
-      def get(key: DirectoryUsername, seq: SequenceQuery[TwoPartSequence]): Task[Snapshot[DirectoryUsername, S, UserId]] =
+      val map = collection.concurrent.TrieMap[DirectoryUsernamePrefix, Snapshot[S, Map[Username, UserId]]]()
+      def get(key: DirectoryUsername, seq: SequenceQuery[TwoPartSequence]): Task[Snapshot[S, UserId]] =
         Task {
-          map.getOrElse(prefix(key), Snapshot.zero).fold(Snapshot.zero[DirectoryUsername, S, UserId],
+          map.getOrElse(prefix(key), Snapshot.zero).fold(Snapshot.zero[S, UserId],
             (m, id, t) =>
 
-              m.get(key._2).fold(Snapshot.deleted[DirectoryUsername, S, UserId](id, t)) { uid => Snapshot.value(uid)(id, t) },
+              m.get(key._2).fold(Snapshot.deleted[S, UserId](id, t)) { uid => Snapshot.value(uid)(id, t) },
             (id, t) => Snapshot.deleted(id, t)) // This should not happen
         }
 
-      def put(key: DirectoryUsername, view: Snapshot[DirectoryUsername, S, UserId], mode: SnapshotStoreMode): Task[SnapshotStorage.Error \/ Snapshot[DirectoryUsername, S, UserId]] =
+      def put(key: DirectoryUsername, view: Snapshot[S, UserId], mode: SnapshotStoreMode): Task[SnapshotStorage.Error \/ Snapshot[S, UserId]] =
         Task {
           map.get(prefix(key)) match {
             case None =>
-              val newSnapshot: Snapshot[DirectoryUsername, S, Map[Username, UserId]] =
-                view.fold(Snapshot.zero[DirectoryUsername, S, Map[Username, UserId]], (uid, id, t) => Snapshot.value(Map(key._2 -> uid))(id, t), Snapshot.value(Map()))
+              val newSnapshot: Snapshot[S, Map[Username, UserId]] =
+                view.fold(Snapshot.zero[S, Map[Username, UserId]], (uid, id, t) => Snapshot.value(Map(key._2 -> uid))(id, t), Snapshot.value(Map()))
               map += (prefix(key) -> newSnapshot)
             case Some(s) =>
               (s, view) match {
@@ -120,14 +120,14 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
   }
 
   class ShardedUsernameQueryAPIWithSnapshotPersistence extends ShardedUsernameQueryAPI {
-    override val runPersistSnapshot: Task[SnapshotStorage.Error \/ Snapshot[K, S, V]] => Unit =
+    override val runPersistSnapshot: Task[SnapshotStorage.Error \/ Snapshot[S, V]] => Unit =
       _.run.fold(println(_), _ => ())
   }
 
   class AllUsersQueryAPI(val snapshotStore: SnapshotStorage[Task, DirectoryId, S, List[User]]) extends QueryAPI[DirectoryId, List[User]] {
     override def eventStreamKey = k => k
 
-    override def acc(key: DirectoryId)(v: Snapshot[DirectoryId, S, List[User]], e: Event[KK, S, E]): Snapshot[DirectoryId, S, List[User]] =
+    override def acc(key: DirectoryId)(v: Snapshot[S, List[User]], e: Event[KK, S, E]): Snapshot[S, List[User]] =
       e.operation match {
         case AddUser(user) =>
           val userList: List[User] =
@@ -141,7 +141,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
 
   class AllUsersQueryAPIWithSnapshotPersistence(snapshotStore: SnapshotStorage[Task, DirectoryId, S, List[User]])
       extends AllUsersQueryAPI(snapshotStore) {
-    override val runPersistSnapshot: Task[SnapshotStorage.Error \/ Snapshot[K, S, V]] => Unit =
+    override val runPersistSnapshot: Task[SnapshotStorage.Error \/ Snapshot[S, V]] => Unit =
       _.run.fold(e => throw new RuntimeException(e.toString), _ => ())
   }
 

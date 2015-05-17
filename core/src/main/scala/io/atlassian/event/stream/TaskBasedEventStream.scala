@@ -22,12 +22,12 @@ abstract class TaskBasedEventStream extends EventStream[Task] {
      */
     def executorService: ExecutorService
 
-    override val runPersistSnapshot: Task[SnapshotStorage.Error \/ Snapshot[K, S, V]] => Unit =
+    override val runPersistSnapshot: Task[SnapshotStorage.Error \/ Snapshot[S, V]] => Unit =
       a => Task.fork(a)(executorService).runAsync {
         case -\/(e) => handlePersistLatestSnapshot(SnapshotStorage.Error.unknown(Invalid.Err(e)).left)
         case \/-(r) => handlePersistLatestSnapshot(r)
       }
 
-    protected def handlePersistLatestSnapshot: SnapshotStorage.Error \/ Snapshot[K, S, V] => Unit
+    protected def handlePersistLatestSnapshot: SnapshotStorage.Error \/ Snapshot[S, V] => Unit
   }
 }

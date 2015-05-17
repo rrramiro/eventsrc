@@ -63,7 +63,7 @@ class DynamoSingleSnapshotStorageSpec(val arguments: Arguments) extends ScalaChe
   def getWhatWasPut = Prop.forAll { (nonEmptyKey: UniqueString, v: String) =>
     val expected = (Some(v), Some(1))
     (for {
-      _ <- DBSnapshotStorage.put(nonEmptyKey.unwrap, Snapshot.value[KK, S, V](v)(1, DateTime.now), SnapshotStoreMode.Cache)
+      _ <- DBSnapshotStorage.put(nonEmptyKey.unwrap, Snapshot.value[S, V](v)(1, DateTime.now), SnapshotStoreMode.Cache)
       saved <- DBSnapshotStorage.get(nonEmptyKey.unwrap, SequenceQuery.latest)
     } yield (saved.value, saved.seq)).run === expected
   }

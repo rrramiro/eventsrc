@@ -108,10 +108,10 @@ abstract class DirectoryEventStreamSpec extends SpecificationWithJUnit with Scal
       for {
         s <- queryApi.getSnapshot((k, u.username))
         op <- s.fold(
-          Task.now(Operation.insert[queryApi.K, e.S, queryApi.V, e.E](AddUser(u))),
+          Task.now(Operation.insert[e.S, queryApi.V, e.E](AddUser(u))),
           (_, _, _) => Task.fail(new Exception("Duplicate username")),
           (id, _) => Task.now {
-            Operation.ifSeq[queryApi.K, e.S, queryApi.V, e.E](id, AddUser(u))
+            Operation.ifSeq[e.S, queryApi.V, e.E](id, AddUser(u))
           }
         )
         _ <- saveApi.save((k, u.username), op)

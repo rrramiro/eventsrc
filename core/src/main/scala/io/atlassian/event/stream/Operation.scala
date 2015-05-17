@@ -10,11 +10,11 @@ import scalaz.syntax.nel._
  * @param run Function from a snapshot to an operation that should occur (i.e. should we save the event or reject it)
  * @tparam V The type of the aggregate.
  */
-case class Operation[K, S, V, E](run: Snapshot[K, S, V] => Operation.Result[E]) {
-  def apply(s: Snapshot[K, S, V]): Operation.Result[E] =
+case class Operation[S, V, E](run: Snapshot[S, V] => Operation.Result[E]) {
+  def apply(s: Snapshot[S, V]): Operation.Result[E] =
     run(s)
 
-  def filter(p: V => Boolean, becauseReasons: => NonEmptyList[Reason]): Operation[K, S, V, E] =
+  def filter(p: V => Boolean, becauseReasons: => NonEmptyList[Reason]): Operation[S, V, E] =
     Operation { s =>
       if (s.value.isDefined)
         if (s.value.exists(p)) run(s)
@@ -22,7 +22,7 @@ case class Operation[K, S, V, E](run: Snapshot[K, S, V] => Operation.Result[E]) 
       else Operation.Result.Noop()
     }
 
-  def filter(v: DataValidator.Validator[V]): Operation[K, S, V, E] =
+  def filter(v: DataValidator.Validator[V]): Operation[S, V, E] =
     Operation { s =>
       v(s.value).fold(
         reasons => Operation.Result.reject(reasons),
@@ -32,10 +32,10 @@ case class Operation[K, S, V, E](run: Snapshot[K, S, V] => Operation.Result[E]) 
 }
 
 object Operation {
-  def insert[K, S, V, E](e: E): Operation[K, S, V, E] =
+  def insert[S, V, E](e: E): Operation[S, V, E] =
     Operation { _ => Result.success(e) }
 
-  def ifSeq[K, S, V, E](seq: S, e: E): Operation[K, S, V, E] =
+  def ifSeq[S, V, E](seq: S, e: E): Operation[S, V, E] =
     Operation { snapshot =>
       if (snapshot.seq == seq) Result.success(e)
       else Result.reject(Reason(s"Mismatched event stream sequence number: ${snapshot.seq} does not match expected $seq").wrapNel)
@@ -43,13 +43,13 @@ object Operation {
 
   object syntax {
     implicit class ToOperationOps[E](val self: E) {
-      def op[K, S, V]: Operation[K, S, V, E] =
+      def op[S, V]: Operation[S, V, E] =
         Operation.insert(self)
 
-      def updateOp[K, S, V](onlyIf: V => Boolean, reason: Reason = Reason("failed update predicate")): Operation[K, S, V, E] =
+      def updateOp[S, V](onlyIf: V => Boolean, reason: Reason = Reason("failed update predicate")): Operation[S, V, E] =
         Operation.insert(self).filter(onlyIf, NonEmptyList(reason))
 
-      def updateOp[K, S, V](validator: DataValidator.Validator[V]): Operation[K, S, V, E] =
+      def updateOp[S, V](validator: DataValidator.Validator[V]): Operation[S, V, E] =
         Operation.insert(self).filter(validator)
     }
   }
