@@ -5,9 +5,11 @@ import argonaut._, Argonaut._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.{ Gen, Arbitrary }
 
-import scalaz.{ @@, \/ }
+import scalaz.\/
 import scalaz.concurrent.Task
 import scalaz.syntax.either._
+import scalaz.syntax.std.option._
+import Event.syntax._
 
 sealed trait DirectoryEvent
 case class AddUser(user: User) extends DirectoryEvent
@@ -75,12 +77,10 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
     override def eventStreamKey = _._1
 
     override def acc(key: DirectoryUsername)(v: Snapshot[S, UserId], e: Event[KK, S, E]): Snapshot[S, UserId] =
-      e.operation match {
-        case AddUser(user) =>
-          if (key._2 == user.username)
-            Snapshot.value(user.id)(e.id.seq, e.time)
-          else
-            v
+      e.process(v) { ov =>
+        {
+          case AddUser(user) if key._2 == user.username => user.id.some
+        }
       }
 
     object snapshotStore extends SnapshotStorage[Task, DirectoryUsername, S, UserId] {
@@ -128,12 +128,11 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
     override def eventStreamKey = k => k
 
     override def acc(key: DirectoryId)(v: Snapshot[S, List[User]], e: Event[KK, S, E]): Snapshot[S, List[User]] =
-      e.operation match {
-        case AddUser(user) =>
-          val userList: List[User] =
-            v.value.fold(List(user)) { l => user :: l }
-
-          Snapshot.Value(userList, e.id.seq, e.time)
+      e.process(v) { ov =>
+        {
+          case AddUser(user) =>
+            ov.fold(List(user)) { l => user :: l }.some
+        }
       }
   }
 

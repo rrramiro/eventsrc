@@ -19,6 +19,12 @@ object Event {
     implicit class EventSyntax[KK, S, E](val e: Event[KK, S, E]) extends AnyVal {
       def at: (S, DateTime) =
         Event.at(e)
+
+      def process[K, V](s: Snapshot[S, V])(f: Option[V] => PartialFunction[E, Option[V]]): Snapshot[S, V] =
+        f(s.value).applyOrElse(e.operation, { (_: E) => s.value }) match {
+          case None => Snapshot.deleted.tupled(e.at)
+          case Some(v) => Snapshot.value(v).tupled(e.at)
+        }
     }
   }
 }
