@@ -94,7 +94,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
     /**
      * Transform a given aggregate key to the key for the underlying event stream
      */
-    private[stream] def eventStreamKey: K => KK
+    private[stream] def toStreamKey: K => KK
 
     /**
      * Wraps output from `generateLatestSnapshot` which is both the latest snapshot and what was previously persisted.
@@ -126,7 +126,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
       for {
         persistedSnapshot <- snapshotStore.get(key, SequenceQuery.latest[S])
         fromSeq = persistedSnapshot.seq
-        events = eventStore.get(eventStreamKey(key), fromSeq)
+        events = eventStore.get(toStreamKey(key), fromSeq)
         theSnapshot <- snapshotFold(persistedSnapshot, events, acc(key))
       } yield LatestSnapshotResult(theSnapshot, persistedSnapshot)
 
@@ -140,7 +140,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
         persistedSnapshot <- snapshotStore.get(key, at.fold(SequenceQuery.latest[S])(SequenceQuery.before))
         fromSeq = persistedSnapshot.seq
         pred = at.fold[Event[KK, S, E] => Boolean] { _ => true } { seq => e => S.order.lessThanOrEqual(e.id.seq, seq) }
-        events = eventStore.get(eventStreamKey(key), fromSeq).takeWhile(pred)
+        events = eventStore.get(toStreamKey(key), fromSeq).takeWhile(pred)
         theSnapshot <- snapshotFold(persistedSnapshot, events, acc(key))
       } yield theSnapshot
 
@@ -162,7 +162,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
     final def getHistory(key: K, from: Option[S]): F[Process[F, Snapshot[S, V]]] =
       for {
         startingSnapshot <- generateSnapshotAt(key, from)
-      } yield eventStore.get(eventStreamKey(key), startingSnapshot.seq)
+      } yield eventStore.get(toStreamKey(key), startingSnapshot.seq)
         .scan[Snapshot[S, V]](startingSnapshot) {
           acc(key)
         }.drop(1)
@@ -179,7 +179,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
       // We need to get the earliest snapshot, then the stream of events from that snapshot
       for {
         earliestSnapshot <- snapshotStore.get(key, SequenceQuery.earliest[S])
-        value <- snapshotFold(earliestSnapshot, eventStore.get(eventStreamKey(key), earliestSnapshot.seq).takeWhile { _.time <= time }, acc(key)).map { _.value }
+        value <- snapshotFold(earliestSnapshot, eventStore.get(toStreamKey(key), earliestSnapshot.seq).takeWhile { _.time <= time }, acc(key)).map { _.value }
       } yield value
     }
 
@@ -212,7 +212,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
      */
     final def forceRefreshPersistedSnapshot(key: K, forceStartAt: S): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
       for {
-        snapshotToSave <- snapshotFold(Snapshot.zero, eventStore.get(eventStreamKey(key), Some(forceStartAt)), acc(key))
+        snapshotToSave <- snapshotFold(Snapshot.zero, eventStore.get(toStreamKey(key), Some(forceStartAt)), acc(key))
         saveResult <- persistSnapshotOp(key, snapshotToSave, None)
       } yield saveResult
 
@@ -257,7 +257,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
         result <- op.fold(
           Error.noop.left[Event[KK, S, E]].point[F],
           Error.reject(_).left[Event[KK, S, E]].point[F],
-          e => eventStore.put(Event.next[KK, S, E](eventStreamKey(key), old.latest.seq, e))
+          e => eventStore.put(Event.next[KK, S, E](toStreamKey(key), old.latest.seq, e))
         )
         transform <- result match {
           case -\/(Error.DuplicateEvent) =>

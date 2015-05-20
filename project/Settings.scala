@@ -43,7 +43,6 @@ object Settings {
         Resolver.defaultLocal
       , Resolver.mavenLocal
       , "atlassian-public"   at "https://maven.atlassian.com/content/groups/atlassian-public/"
-      , "atlassian-internal" at "https://maven.atlassian.com/content/groups/internal/"
       , Resolver.sonatypeRepo("public")
       , Resolver.sonatypeRepo("releases")
       , Resolver.sonatypeRepo("snapshots")
@@ -51,7 +50,6 @@ object Settings {
       )
     , mappings in (Compile, packageBin) ++= Seq(
         file("LICENSE") -> "META-INF/LICENSE"
-      , file("NOTICE")  -> "META-INF/NOTICE"
       )
     , credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
     , addCompilerPlugin("org.scalamacros"        % "paradise"       % "2.0.1" cross CrossVersion.full)

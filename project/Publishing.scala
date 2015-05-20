@@ -17,24 +17,30 @@ import Keys._
 
 object Publishing extends Plugin {
   val nexus = "https://maven.atlassian.com/"
-  lazy val release = Some("releases" at nexus + "private")
-  lazy val publicRelease = Some("public-releases" at nexus + "public")
-  lazy val snapshots = Some("snapshots" at nexus + "private-snapshot")
+  lazy val release = Some("releases" at nexus + "public")
+  lazy val snapshots = Some("snapshots" at nexus + "public-snapshot")
   lazy val local = Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
 
   override def settings = 
     Seq(
-      publishTo <<= publishToPrivate
+      publishTo <<= publishToPublic
     , publishMavenStyle := true
     , publishArtifact in Test := false
+    , pomExtra :=
+        <scm>
+          <url>https://bitbucket.org/atlassianlabs/eventsrc</url>
+          <connection>scm:ssh://git@bitbucket.org:atlassianlabs/eventsrc.git</connection>
+          <developerConnection>scm:git:ssh://git@bitbucket.org:atlassianlabs/eventsrc.git</developerConnection>
+        </scm>
+          <issueManagement>
+            <system>Bitbucket</system>
+            <url>https://bitbucket.org/atlassianlabs/eventsrc/issues</url>
+          </issueManagement>
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom
     )
 
-  lazy val publishToPrivate =
-    version { publishForVersion(local)(release) }
-
   lazy val publishToPublic =
-    version { publishForVersion(local)(publicRelease) }
+    version { publishForVersion(local)(release) }
 
   private def publishForVersion(snapshot: Option[Resolver])(release: Option[Resolver])(v: String): Option[Resolver] =
     if (v.trim endsWith "SNAPSHOT") snapshot else release

@@ -74,7 +74,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
   override implicit lazy val S = TwoPartSequence.twoPartSequence(zone)
 
   class ShardedUsernameQueryAPI extends QueryAPI[DirectoryUsername, UserId] {
-    override def eventStreamKey = _._1
+    override def toStreamKey = _._1
 
     override def acc(key: DirectoryUsername)(v: Snapshot[S, UserId], e: Event[KK, S, E]): Snapshot[S, UserId] =
       e.process(v) { ov =>
@@ -125,7 +125,7 @@ abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
   }
 
   class AllUsersQueryAPI(val snapshotStore: SnapshotStorage[Task, DirectoryId, S, List[User]]) extends QueryAPI[DirectoryId, List[User]] {
-    override def eventStreamKey = k => k
+    override def toStreamKey = k => k
 
     override def acc(key: DirectoryId)(v: Snapshot[S, List[User]], e: Event[KK, S, E]): Snapshot[S, List[User]] =
       e.process(v) { ov =>
