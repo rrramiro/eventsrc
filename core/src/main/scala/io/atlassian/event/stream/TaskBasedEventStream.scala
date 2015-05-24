@@ -5,7 +5,7 @@ import java.util.concurrent.ExecutorService
 import kadai.Invalid
 
 import scalaz.concurrent.Task
-import scalaz.{ \/, -\/, \/- }
+import scalaz._
 import scalaz.syntax.either._
 
 /**
@@ -13,6 +13,7 @@ import scalaz.syntax.either._
  * refreshing any persisted snapshots.
  */
 abstract class TaskBasedEventStream extends EventStream[Task] {
+  override def TaskToF: Task ~> Task = NaturalTransformation.refl
   /**
    * Version of QueryAPI that persists latest snapshot after generation.
    */

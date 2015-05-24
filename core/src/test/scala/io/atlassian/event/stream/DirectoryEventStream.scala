@@ -65,7 +65,7 @@ object User {
     )
 }
 
-abstract class DirectoryEventStream(zone: ZoneId) extends EventStream[Task] {
+abstract class DirectoryEventStream(zone: ZoneId) extends TaskBasedEventStream {
 
   type KK = DirectoryId
   type S = TwoPartSequence
