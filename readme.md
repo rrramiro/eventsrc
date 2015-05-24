@@ -17,7 +17,7 @@ The basic concept is that we represent the state of data as a series of immutabl
      in a reliable and scalable fashion where it can be processed, typically in a more efficient manner for a specific use case e.g. sending events to
      ElasticSearch for full-text search of entities. We can also send these events to a remote replica easily for disaster recovery.
 
-TODO - Add a link to event sourcing presentation slides/video
+There is a slide deck walking through the EventStream library in the doc directory.
 
 ## Usage
 
