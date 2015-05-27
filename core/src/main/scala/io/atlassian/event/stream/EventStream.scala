@@ -53,7 +53,7 @@ object EventStream {
     import scala.concurrent.duration._
 
     def apply(): SaveAPIConfig = {
-      val Some(r) = Retry.exponentialBackoffWithJitter(10, 1.millis, 2.0)
+      val Some(r) = Retry.fullJitter(10, 1.millis, 2.0)
       SaveAPIConfig(r)
     }
   }
