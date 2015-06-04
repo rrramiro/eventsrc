@@ -4,6 +4,7 @@ package stream
 import org.joda.time.DateTime
 
 import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scalaz._
 import scalaz.concurrent.Task
 import scalaz.stream.{ process1, Process }
@@ -48,15 +49,7 @@ object EventStream {
     val latestEvent: QueryConsistency = LatestEvent
   }
 
-  case class SaveAPIConfig(retry: Retry)
-  object SaveAPIConfig {
-    import scala.concurrent.duration._
-
-    def apply(): SaveAPIConfig = {
-      val Some(r) = Retry.fullJitter(10, 1.millis, 2.0)
-      SaveAPIConfig(r)
-    }
-  }
+  case class SaveAPIConfig(retry: Retry = Retry.fullJitter(10, 10.millis, 2.0))
 }
 
 /**
@@ -298,7 +291,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
       } yield transform
 
     final def save(key: K, operation: Operation[S, V, E]): F[SaveResult[S, V]] =
-      saveWithRetry(key, operation, config.retry.unsafePerformIO())
+      saveWithRetry(key, operation, config.retry.run)
   }
 }
 
