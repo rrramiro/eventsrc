@@ -3,7 +3,10 @@ package stream
 
 import org.joda.time.DateTime
 
+import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scalaz._
+import scalaz.concurrent.Task
 import scalaz.stream.{ process1, Process }
 import scalaz.syntax.all._
 import scalaz.syntax.std.option._
@@ -18,6 +21,8 @@ object EventStream {
     def noop: Error = Noop
 
     def reject(s: NonEmptyList[Reason]): Error = Rejected(s)
+
+    val duplicate: Error = DuplicateEvent
 
     case object DuplicateEvent extends Error
 
@@ -43,6 +48,8 @@ object EventStream {
     val latestSnapshot: QueryConsistency = LatestSnapshot
     val latestEvent: QueryConsistency = LatestEvent
   }
+
+  case class SaveAPIConfig(retry: Retry = Retry.fullJitter(10, 10.millis, 2.0))
 }
 
 /**
@@ -67,6 +74,8 @@ abstract class EventStream[F[_]: Monad: Catchable] {
   protected implicit def S: Sequence[S]
 
   protected def eventStore: EventStorage[F, KK, S, E]
+
+  protected def TaskToF: Task ~> F
 
   /**
    * QueryAPI provides the main API for consumers to query an event source. It is a basic key-value store.
@@ -244,13 +253,13 @@ abstract class EventStream[F[_]: Monad: Catchable] {
    * @tparam Key type for the aggregate (may be different from the key for the event stream)
    * @tparam Val Aggregate type
    */
-  class SaveAPI[Key, Val](aggregator: QueryAPI[Key, Val]) {
+  class SaveAPI[Key, Val](aggregator: QueryAPI[Key, Val], config: SaveAPIConfig = SaveAPIConfig()) {
     type K = Key
     type V = Val
 
     import aggregator._
 
-    final def save(key: K, operation: Operation[S, V, E]): F[SaveResult[S, V]] =
+    private def saveWithRetry(key: K, operation: Operation[S, V, E], durations: Seq[Duration]): F[SaveResult[S, V]] =
       for {
         old <- generateLatestSnapshot(key)
         op = operation.run(old.latest)
@@ -261,7 +270,12 @@ abstract class EventStream[F[_]: Monad: Catchable] {
         )
         transform <- result match {
           case -\/(Error.DuplicateEvent) =>
-            save(key, operation)
+            durations match {
+              case d :: ds =>
+                TaskToF { Task.schedule((), d) } flatMap { _ => saveWithRetry(key, operation, ds) }
+              case _ =>
+                SaveResult.reject[S, V](NonEmptyList(Reason("Failed to save after retries"))).point[F]
+            }
           case -\/(Error.Noop) =>
             SaveResult.noop[S, V](old.latest).point[F]
           case -\/(Error.Rejected(r)) =>
@@ -275,5 +289,9 @@ abstract class EventStream[F[_]: Monad: Catchable] {
             } yield saveResult
         }
       } yield transform
+
+    final def save(key: K, operation: Operation[S, V, E]): F[SaveResult[S, V]] =
+      saveWithRetry(key, operation, config.retry.run)
   }
 }
+
