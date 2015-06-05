@@ -293,7 +293,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
       }
 
     final def save(key: K, operation: Operation[S, V, E]): F[SaveResult[S, V]] =
-      saveWithRetry(key, operation, Seq(0.milli) ++ config.retry.run)
+      saveWithRetry(key, operation, 0.milli +: config.retry.run)
   }
 }
 
