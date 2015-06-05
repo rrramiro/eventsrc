@@ -49,7 +49,7 @@ object EventStream {
     val latestEvent: QueryConsistency = LatestEvent
   }
 
-  case class SaveAPIConfig(retry: Retry = Retry.fullJitter(10, 10.millis, 2.0))
+  case class SaveAPIConfig(retry: Retry = Retry.fullJitter(12, 5.millis, 2.0))
 }
 
 /**
@@ -260,38 +260,40 @@ abstract class EventStream[F[_]: Monad: Catchable] {
     import aggregator._
 
     private def saveWithRetry(key: K, operation: Operation[S, V, E], durations: Seq[Duration]): F[SaveResult[S, V]] =
-      for {
-        old <- generateLatestSnapshot(key)
-        op = operation.run(old.latest)
-        result <- op.fold(
-          Error.noop.left[Event[KK, S, E]].point[F],
-          Error.reject(_).left[Event[KK, S, E]].point[F],
-          e => eventStore.put(Event.next[KK, S, E](toStreamKey(key), old.latest.seq, e))
-        )
-        transform <- result match {
-          case -\/(Error.DuplicateEvent) =>
-            durations match {
-              case d :: ds =>
-                TaskToF { Task.schedule((), d) } flatMap { _ => saveWithRetry(key, operation, ds) }
-              case _ =>
-                SaveResult.reject[S, V](NonEmptyList(Reason("Failed to save after retries"))).point[F]
-            }
-          case -\/(Error.Noop) =>
-            SaveResult.noop[S, V](old.latest).point[F]
-          case -\/(Error.Rejected(r)) =>
-            SaveResult.reject[S, V](r).point[F]
-          case \/-(event) =>
-            val newSnapshot = acc(key)(old.latest, event)
+      durations match {
+        case d :: ds =>
+          for {
+            _ <- TaskToF { Task.schedule((), d) }
+            old <- generateLatestSnapshot(key)
+            op = operation.run(old.latest)
+            result <- op.fold(
+              Error.noop.left[Event[KK, S, E]].point[F],
+              Error.reject(_).left[Event[KK, S, E]].point[F],
+              e => eventStore.put(Event.next[KK, S, E](toStreamKey(key), old.latest.seq, e))
+            )
+            transform <- result match {
+              case -\/(Error.DuplicateEvent) =>
+                saveWithRetry(key, operation, ds)
+              case -\/(Error.Noop) =>
+                SaveResult.noop[S, V](old.latest).point[F]
+              case -\/(Error.Rejected(r)) =>
+                SaveResult.reject[S, V](r).point[F]
+              case \/-(event) =>
+                val newSnapshot = acc(key)(old.latest, event)
 
-            for {
-              saveResult <- SaveResult.success[S, V](newSnapshot).point[F]
-              _ = persistSnapshot(key, newSnapshot, old.previousPersisted.some)
-            } yield saveResult
-        }
-      } yield transform
+                for {
+                  saveResult <- SaveResult.success[S, V](newSnapshot).point[F]
+                  _ = persistSnapshot(key, newSnapshot, old.previousPersisted.some)
+                } yield saveResult
+            }
+          } yield transform
+
+        case _ =>
+          SaveResult.reject[S, V](NonEmptyList(Reason("Failed to save after retries"))).point[F]
+      }
 
     final def save(key: K, operation: Operation[S, V, E]): F[SaveResult[S, V]] =
-      saveWithRetry(key, operation, config.retry.run)
+      saveWithRetry(key, operation, Seq(0.milli) ++ config.retry.run)
   }
 }
 
