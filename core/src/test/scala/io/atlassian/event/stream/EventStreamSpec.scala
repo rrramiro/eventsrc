@@ -30,7 +30,7 @@ class EventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
       { _ => success },
       { _ => failure }
     )
-  }
+  }.set(minTestsOk = 1)
 
   class AlwaysFailingDirectoryEventStream extends DirectoryEventStream(1) {
     override val eventStore = new EventStorage[Task, DirectoryEventStream.DirectoryId, TwoPartSequence, DirectoryEvent] {

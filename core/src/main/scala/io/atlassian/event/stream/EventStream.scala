@@ -49,7 +49,7 @@ object EventStream {
     val latestEvent: QueryConsistency = LatestEvent
   }
 
-  case class SaveAPIConfig(retry: Retry = Retry.fullJitter(12, 5.millis, 2.0))
+  case class SaveAPIConfig(retry: Retry = Retry.fullJitter(20, 5.millis, 2.0))
 }
 
 /**
@@ -293,7 +293,7 @@ abstract class EventStream[F[_]: Monad: Catchable] {
       }
 
     final def save(key: K, operation: Operation[S, V, E]): F[SaveResult[S, V]] =
-      saveWithRetry(key, operation, 0.milli +: config.retry.run)
+      saveWithRetry(key, operation, Seq(0.milli) ++ config.retry.run)
   }
 }
 
