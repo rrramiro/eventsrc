@@ -31,7 +31,7 @@ fi
 
 echo "Starting Local DynamoDB..."
 
-if [[ ! -z "$dynalite" ]]; then
+if [ ! -z "$dynalite" ]; then
     eval "($DYNAMO_DB_LIB_HOME/node_modules/.bin/dynalite --port $PORT) &"
 else
     eval "(java -Djava.library.path=$DYNAMO_DB_LIB_HOME/DynamoDBLocal_lib -jar $DYNAMO_DB_LIB_HOME/DynamoDBLocal.jar --dbPath $DYNAMO_DB_HOME --port $PORT) &"
