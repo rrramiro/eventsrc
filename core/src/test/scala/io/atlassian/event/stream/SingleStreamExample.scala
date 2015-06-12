@@ -1,10 +1,12 @@
 package io.atlassian.event
 package stream
 
+import java.util.concurrent.ExecutorService
+
 import org.scalacheck.{ Gen, Arbitrary }
 import Arbitrary.arbitrary
 
-import scalaz.@@
+import scalaz.{ \/, @@ }
 import Event.syntax._
 import scalaz.concurrent.Task
 import scalaz.std.option._
@@ -84,7 +86,9 @@ object SingleStreamExample {
 
     override implicit lazy val S = TwoPartSequence.twoPartSequence(zone)
 
-    class ByKeyQuery(val snapshotStore: SnapshotStorage[Task, Client.Id, TwoPartSequence, Client.Data]) extends QueryAPI[Client.Id, Client.Data] {
+    class ByKeyQuery(val snapshotStore: SnapshotStorage[Task, Client.Id, TwoPartSequence, Client.Data], val executorService: ExecutorService) extends AsyncRefreshingQueryAPI[Client.Id, Client.Data] {
+      protected def handlePersistLatestSnapshot: SnapshotStorage.Error \/ Snapshot[S, V] => Unit =
+        _.fold(e => println(e), _ => ())
 
       override val toStreamKey: Client.Id => SingleStreamKey =
         _ => SingleStreamKey.VAL

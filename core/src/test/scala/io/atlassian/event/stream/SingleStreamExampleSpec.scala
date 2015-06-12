@@ -1,6 +1,8 @@
 package io.atlassian.event
 package stream
 
+import java.util.concurrent.Executors
+
 import org.scalacheck.Prop
 
 import scalaz.concurrent.{ Strategy, Task }
@@ -21,11 +23,12 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
 
   protected def newEventStream(): ClientEventStream
   protected def newSnapshotStore(): SnapshotStorage[Task, Client.Id, TwoPartSequence, Client.Data]
+  lazy val executorService = Executors.newCachedThreadPool()
 
   def addAndGetClientById = Prop.forAll { (k: Client.Id, c: Client.Data) =>
     val eventStream = newEventStream
     val snapshotStore = newSnapshotStore
-    val api = new eventStream.ByKeyQuery(snapshotStore)
+    val api = new eventStream.ByKeyQuery(snapshotStore, executorService)
     val saveApi = new eventStream.SaveAPI[Client.Id, Client.Data](api)
     (for {
       x <- saveApi.save(k, ClientEvent.insert(k, c).op[TwoPartSequence, Client.Data])
@@ -36,7 +39,7 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
   def addAndDelete = Prop.forAll { (k: Client.Id, c: Client.Data) =>
     val eventStream = newEventStream
     val snapshotStore = newSnapshotStore
-    val api = new eventStream.ByKeyQuery(snapshotStore)
+    val api = new eventStream.ByKeyQuery(snapshotStore, executorService)
     val saveApi = new eventStream.SaveAPI[Client.Id, Client.Data](api)
     (for {
       _ <- saveApi.save(k, ClientEvent.insert(k, c).op)
@@ -48,7 +51,7 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
   def addClients = Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
     val stream = newEventStream
     val snapshotStore = newSnapshotStore
-    val query = new stream.ByKeyQuery(snapshotStore)
+    val query = new stream.ByKeyQuery(snapshotStore, executorService)
     val saveApi = new stream.SaveAPI[Client.Id, Client.Data](query)
 
     val expected = (Some(d1), Some(d2))
@@ -63,7 +66,7 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
   def deleteClients = Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
     val stream = newEventStream
     val snapshotStore = newSnapshotStore
-    val query = new stream.ByKeyQuery(snapshotStore)
+    val query = new stream.ByKeyQuery(snapshotStore, executorService)
     val saveApi = new stream.SaveAPI[Client.Id, Client.Data](query)
 
     val expected = (Some(d1), None, Some(d2), None)
