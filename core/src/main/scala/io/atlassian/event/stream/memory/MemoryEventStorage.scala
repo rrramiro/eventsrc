@@ -22,7 +22,7 @@ class MemoryEventStorage[KK, S: Sequence, E] extends EventStorage[Task, KK, S, E
     }
 
   override def put(ev: Event[KK, S, E]): Task[EventStream.Error \/ Event[KK, S, E]] =
-    Task {
+    Task.delay {
       // Just assume there are no duplicates for this test and that everything is ordered when I get it
       map += (ev.id.key -> (ev :: map.getOrElse(ev.id.key, Nil)))
       ev.right
