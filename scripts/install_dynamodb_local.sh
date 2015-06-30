@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/sh -e
 
 options=':fd'
 
@@ -27,7 +27,7 @@ SCRIPT_DIR=`dirname "$0"`
 DYNAMO_DB_LIB_HOME="$SCRIPT_DIR/../../dynamodb"
 TIMEOUT_SECONDS=20
 
-if [[ ! -z "$dynalite" ]]; then
+if [ ! -z "$dynalite" ]; then
     expectedBinary=$DYNAMO_DB_LIB_HOME/node_modules/.bin/dynalite
 else
     expectedBinary=$DYNAMO_DB_LIB_HOME/DynamoDBLocal.jar
@@ -36,7 +36,7 @@ fi
 
 mkdir -p "$DYNAMO_DB_LIB_HOME"; WAS_CREATED=$?
 if [ ! -e $expectedBinary -o -n "$force" ]; then
-    if [[ ! -z "$dynalite" ]]; then
+    if [ ! -z "$dynalite" ]; then
         # create the node_modules subdir and call npm to install
         echo "Installing Dynalite"
         mkdir -p "$DYNAMO_DB_LIB_HOME/node_modules"
