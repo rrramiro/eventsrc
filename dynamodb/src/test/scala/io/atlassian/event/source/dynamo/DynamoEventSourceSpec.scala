@@ -27,7 +27,7 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
     lazy val tableDefinition =
       TableDefinition.from[String, String, String, Long](tableName, key, value, key, seq)
 
-    class MyDAO extends DAO[Task](dynamoClient, tableDefinition)
+    class MyDAO extends DAO[Task](tableDefinition)
 
     class DBEventStoreAPI[F[_]](val store: Storage[F])(implicit val M: Monad[F], val C: Catchable[F]) extends API[F]
 

@@ -25,7 +25,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
 
   case class DAOConfig(queryConsistency: ReadConsistency = ReadConsistency.Eventual)
 
-  abstract class DAO[F[_]](awsClient: DynamoClient, tableDef: TableDefinition[KK, VV, KK, S], config: DAOConfig = DAOConfig())(
+  abstract class DAO[F[_]](tableDef: TableDefinition[KK, VV, KK, S], config: DAOConfig = DAOConfig())(
       implicit M: Monad[F],
       C: Catchable[F],
       runAction: DynamoDBAction ~> Task,
