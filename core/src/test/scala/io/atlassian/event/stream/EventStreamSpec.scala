@@ -21,27 +21,27 @@ class EventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
     """
 
   def saveAPIRetries = Prop.forAll { (k: DirectoryId, u1: User) =>
-    val es = new AlwaysFailingDirectoryEventStream
-    val api = es.AllUsersQueryAPIWithNoSnapshots
-    val saveApi = new es.AllUsersSaveAPI(api)
+    val api = DirectoryEventStream.allUsersQueryAPIWithNoSnapshots(AlwaysFailingDirectoryEventStream.eventStore)
+    val saveApi = DirectoryEventStream.allUsersSaveAPI(api)
 
-    saveApi.save(k, Operation.insert(DirectoryEvent.addUser(u1))).run.fold(
+    saveApi.save(k, Operation.insert(DirectoryEvent.addUser(u1)))(SaveAPIConfig.default).run.fold(
       { _ => failure },
       { _ => success },
       { _ => failure }
     )
   }.set(minTestsOk = 1)
+}
 
-  class AlwaysFailingDirectoryEventStream extends DirectoryEventStream(1) {
-    override val eventStore = new EventStorage[Task, DirectoryEventStream.DirectoryId, TwoPartSequence, DirectoryEvent] {
-      override def get(key: KK, fromOption: Option[S]): Process[Task, Event[KK, S, E]] =
-        Process.halt
+object AlwaysFailingDirectoryEventStream {
+  import DirectoryEventStream.DirectoryId
 
-      override def put(ev: Event[KK, S, E]): Task[EventStream.Error \/ Event[KK, S, E]] =
-        Task {
-          EventStream.Error.duplicate.left
-        }
-    }
+  val eventStore = new EventStorage[Task, DirectoryId, TwoPartSequence[Long], DirectoryEvent] {
+    def get(key: DirectoryId, fromOption: Option[TwoPartSequence[Long]]) =
+      Process.halt
+
+    def put(ev: Event[DirectoryId, TwoPartSequence[Long], DirectoryEvent]) =
+      Task {
+        EventStreamError.duplicate.left
+      }
   }
-
 }

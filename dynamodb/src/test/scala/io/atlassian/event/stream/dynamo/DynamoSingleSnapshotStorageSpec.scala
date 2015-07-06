@@ -38,21 +38,20 @@ class DynamoSingleSnapshotStorageSpec(val arguments: Arguments) extends ScalaChe
     val tableName = s"DynamoSingleSnapshotStorageSpec_${System.currentTimeMillis}"
     val key = Column[KK]("key")
     val seq = Column[S]("seq")
-    val value = Column[V]("value")
+    val value = Column[V]("value").column
     lazy val tableDefinition =
-      TableDefinition.from[KK, V, KK, S](tableName, key, value, key, seq)
+      TableDefinition.from[KK, V, KK, S](tableName, key.column, value, key, seq)
 
   }
 
-  implicit val TaskToTask: Task ~> Task = scalaz.NaturalTransformation.refl[Task]
-
-  object DBSnapshotStorage extends DynamoSingleSnapshotStorage[Task, KK, S, V](DynamoMappings.tableDefinition)
-
-  implicit lazy val runner: DynamoDBAction ~> Task =
+  val runner: DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
         a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
     }
+
+  val DBDefinition = DynamoSingleSnapshotStorage.fromDefinition[Task, KK, S, V](DynamoMappings.tableDefinition, runner)
+  val DBSnapshotStorage = DBDefinition.snapshotStore
 
   def getNoSnapshot = Prop.forAll { (nonEmptyKey: UniqueString) =>
     DBSnapshotStorage.get(nonEmptyKey.unwrap, SequenceQuery.latest).run.seq must beNone and
@@ -69,9 +68,9 @@ class DynamoSingleSnapshotStorageSpec(val arguments: Arguments) extends ScalaChe
   }
 
   def createTestTable() =
-    DynamoDBOps.createTable(DBSnapshotStorage.tableDefinition)
+    DynamoDBOps.createTable(DBDefinition.tableDefinition)
 
   def deleteTestTable() =
-    DynamoDBOps.deleteTable(DBSnapshotStorage.tableDefinition)
+    DynamoDBOps.deleteTable(DBDefinition.tableDefinition)
 
 }

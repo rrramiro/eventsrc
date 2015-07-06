@@ -7,6 +7,7 @@ import scalaz.{ -\/, Catchable, Monad, NonEmptyList, \/, \/- }
 import scalaz.stream.{ Process, process1 }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
+import scalaz.syntax.order._
 
 /**
  * An event source is an append-only store of data. Data is represented as a series of events that when replayed in
@@ -71,7 +72,7 @@ object EventSource {
 trait EventSource[K, V, S] {
   import EventSource._
 
-  def S: Sequence[S]
+  implicit def S: Sequence[S]
 
   /**
    * A event is identified by the key and an incrementing sequence number
@@ -208,7 +209,7 @@ trait EventSource[K, V, S] {
      * @return view of the data at event with sequence 'seq'
      */
     final def getAt(key: K, seq: S): F[Option[V]] =
-      getWhile(key) { e => S.order.lessThanOrEqual(e.id.sequence, seq) }
+      getWhile(key) { e => e.id.sequence <= seq }
 
     final def getHistory(key: K): F[Process[F, Snapshot]] =
       M.point(store.get(key).scan[Snapshot](Snapshot.zero) {

@@ -2,7 +2,7 @@ package io.atlassian.event
 package stream
 package dynamo
 
-import EventStream.Error.DuplicateEvent
+import EventStreamError.DuplicateEvent
 import source.Transform
 import io.atlassian.aws.WrappedInvalidException
 import io.atlassian.aws.dynamodb._
@@ -30,12 +30,12 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
     val tableName = s"DynamoEventStorageSpec_${System.currentTimeMillis}"
     val key = Column[KK]("key")
     val seq = Column[S]("seq")
-    val value = Column[V]("value")
+    val value = Column[V]("value").column
     implicit val transformOpDecoder: Decoder[Transform.Op] =
       Decoder[String].collect(Function.unlift(Transform.Op.unapply))
     implicit val transformOpEncoder: Encoder[Transform.Op] =
       Encoder[String].contramap(Transform.Op.apply)
-    val transform = Column.compose2[E](Column[Transform.Op]("Operation"), value.liftOption) {
+    val transform = Column.compose2[E](Column[Transform.Op]("Operation").column, value.liftOption) {
       case Transform.Delete => (Transform.Op.Delete, None)
       case Transform.Insert(v) => (Transform.Op.Insert, Some(v))
     } {
@@ -46,7 +46,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
     }
 
     lazy val tableDefinition =
-      TableDefinition.from[KK, E, KK, S](tableName, key, transform, key, seq)
+      TableDefinition.from[KK, E, KK, S](tableName, key.column, transform, key, seq)
 
   }
 
@@ -99,7 +99,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
         val event = Event[KK, S, E](eventId, DateTime.now, Transform.insert(valueToSave))
         DBEventStorage.put(event).run
       }
-      DBEventStorage.get(key).runFoldMap { _ => 1 }.attemptRun match {
+      DBEventStorage.get(key, None).runFoldMap { _ => 1 }.attemptRun match {
         case \/-(count) => count === 150
         case _ => ko
       }
@@ -120,8 +120,8 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
       }
 
       // Make sure we get the right number of events and the value is correct
-      val r: Task[Int] = DBEventStorage.get(key).runFoldMap { _ => 1 }
-      val last: Task[Option[String]] = DBEventStorage.get(key).runLast.map { _.flatMap { _.operation.value } }
+      val r: Task[Int] = DBEventStorage.get(key, None).runFoldMap { _ => 1 }
+      val last: Task[Option[String]] = DBEventStorage.get(key, None).runLast.map { _.flatMap { _.operation.value } }
       (r.attemptRun match {
         case \/-(eventCount) => eventCount === 3
         case _ => ko

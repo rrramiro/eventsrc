@@ -2,7 +2,7 @@ package io.atlassian.event.stream.dynamo
 
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
 import io.atlassian.aws.dynamodb._
-import io.atlassian.event.stream.{ Event, EventId, EventStorage, EventStream }
+import io.atlassian.event.stream.{ Event, EventId, EventStorage, EventStreamError }
 import org.joda.time.DateTime
 
 import scalaz._
@@ -27,14 +27,18 @@ class DynamoEventStorage[F[_], KK, S, E](
     runAction: DynamoDBAction ~> Task,
     ToF: Task ~> F)(
         implicit M: Monad[F],
+        EKK: Encoder[KK],
+        DKK: Decoder[KK],
+        ES: Encoder[S],
+        DS: Decoder[S],
         C: Catchable[F]) extends EventStorage[F, KK, S, E] {
 
-  private[dynamo]type EID = EventId[KK, S]
+  private[dynamo] type EID = EventId[KK, S]
   private[dynamo] object EID {
     def apply(k: KK, s: S): EID = EventId[KK, S](k, s)
     def unapply(e: EID): Option[(KK, S)] = EventId.unapply[KK, S](e)
   }
-  private[dynamo]type EV = Event[KK, S, E]
+  private[dynamo] type EV = Event[KK, S, E]
 
   private object table extends Table {
     type K = EID
@@ -44,8 +48,8 @@ class DynamoEventStorage[F[_], KK, S, E](
   }
 
   private[dynamo] object Columns {
-    val eventId = Column.compose2[EID](tableDef.hash, tableDef.range) { case EID(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
-    val lastModified = Column[DateTime]("LastModifiedTimestamp")
+    val eventId = Column.compose2[EID](tableDef.hash.column, tableDef.range.column) { case EID(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
+    val lastModified = Column[DateTime]("LastModifiedTimestamp").column
 
     val event = Column.compose3[EV](eventId.liftOption, lastModified, tableDef.value) {
       case Event(id, ts, tx) => (None, ts, tx)
@@ -60,7 +64,7 @@ class DynamoEventStorage[F[_], KK, S, E](
       table.transform(DynamoDB.interpreter(table)(schema))
 
   lazy val schema =
-    TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)(tableDef.hash.decoder, tableDef.range.decoder)
+    TableDefinition.from[EID, EV, KK, S](tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)
 
   override def get(key: KK, fromSeq: Option[S]): Process[F, Event[KK, S, E]] = {
     import Process._
@@ -91,13 +95,13 @@ class DynamoEventStorage[F[_], KK, S, E](
     }.translate(ToF)
   }
 
-  override def put(event: Event[KK, S, E]): F[EventStream.Error \/ Event[KK, S, E]] =
+  override def put(event: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
     for {
       putResult <- ToF { interpret(table.putIfAbsent(event.id, event)) }
 
       r <- putResult match {
         case Insert.New => event.right.point[F]
-        case Insert.Failed => EventStream.Error.DuplicateEvent.left[EV].point[F]
+        case Insert.Failed => EventStreamError.DuplicateEvent.left[EV].point[F]
       }
     } yield r
 }
