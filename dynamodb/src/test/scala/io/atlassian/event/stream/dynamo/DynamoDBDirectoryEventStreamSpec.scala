@@ -6,9 +6,7 @@ import argonaut._, Argonaut._
 import io.atlassian.aws.WrappedInvalidException
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.stream.memory.MemorySingleSnapshotStorage
-import kadai.Attempt
 import org.specs2.main.Arguments
-import scodec.bits.ByteVector
 
 import scalaz._
 import scalaz.concurrent.Task
@@ -21,10 +19,8 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
           Adding multiple users (store list of users)               ${addMultipleUsers.set(minTestsOk = NUM_TESTS)}
           Checking for duplicate usernames (store list of users)    ${duplicateUsername.set(minTestsOk = NUM_TESTS)}
           Adding multiple users (store list of users and snapshot)  ${addMultipleUsersWithSnapshot.set(minTestsOk = NUM_TESTS)}
-          Checking for duplicate usernames (store list of users and snapshot) ${duplicateUsernameWithSnapshot.set(minTestsOk = NUM_TESTS)}
 
           Checking for duplicate usernames with sharded store       ${duplicateUsernameSharded.set(minTestsOk = NUM_TESTS)}
-          Checking for duplicate usernames with sharded store and snapshot ${duplicateUsernameShardedWithSnapshot.set(minTestsOk = NUM_TESTS)}
 
                                                                     ${step(deleteTestTable)}
                                                                     ${step(stopLocalDynamoDB)}
@@ -35,7 +31,7 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
     if (IS_LOCAL) 100
     else 10
 
-  lazy val runner: DynamoDBAction ~> Task =
+  val runner: DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
         a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
@@ -47,39 +43,15 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
   def deleteTestTable() =
     DynamoDBOps.deleteTable(DirectoryEventStreamDynamoMappings.schema)
 
-  override protected def newEventStream() = new DynamoDirectoryEventStream(1)(runner)
+  override protected val eventStore = DynamoDirectoryEventStream.eventStore(runner)
   override protected def allUserSnapshot() = DirectoryIdListUserSnapshotStorage
 
 }
 
 import DirectoryEventStream._
 
+
 object DirectoryEventStreamDynamoMappings {
-  implicit val TwoPartSeqEncoder: Encoder[TwoPartSequence] =
-    Encoder[NonEmptyBytes].contramap { seq =>
-      ByteVector.fromLong(seq.seq) ++ ByteVector.fromLong(seq.zone) match {
-        case NonEmptyBytes(b) => b
-      }
-    }
-
-  implicit val TwoPartSeqDecoder: Decoder[TwoPartSequence] =
-    Decoder[NonEmptyBytes].mapAttempt { bytes =>
-      if (bytes.bytes.length != 16)
-        Attempt.fail(s"Invalid length of byte vector ${bytes.bytes.length}")
-      else
-        Attempt.safe {
-          bytes.bytes.splitAt(8) match {
-            case (abytes, bbytes) => TwoPartSequence(abytes.toLong(), bbytes.toLong())
-          }
-        }
-    }
-
-  implicit val DirectoryIdEncoder: Encoder[DirectoryId] =
-    Encoder[String].contramap { _.id }
-
-  implicit val DirectoryIdDecoder: Decoder[DirectoryId] =
-    Decoder[String].map { DirectoryId.apply }
-
   implicit val DirectoryEventEncodeJson: EncodeJson[DirectoryEvent] =
     EncodeJson {
       case a @ AddUser(u) => ("add-user" := u) ->: jEmptyObject
@@ -95,19 +67,27 @@ object DirectoryEventStreamDynamoMappings {
   implicit val DirectoryEventDecodeJson: DecodeJson[DirectoryEvent] =
     AddUserDecodeJson map identity
 
-  val key = Column[DirectoryId]("key")
-  val seq = Column[TwoPartSequence]("seq")
-  val event = Column[DirectoryEvent]("event")
+  val key = Column[ColumnDirectoryId]("key")
+  val seq = Column[ColumnTwoPartSequence]("seq")
+  val event = Column[DirectoryEvent]("event").column
   val tableName = s"dynamo_dir_event_stream_test_${System.currentTimeMillis}"
-  val schema = TableDefinition.from[DirectoryId, DirectoryEvent, DirectoryId, TwoPartSequence](tableName, key, event, key, seq)
+  val schema = TableDefinition.from[ColumnDirectoryId, DirectoryEvent, ColumnDirectoryId, ColumnTwoPartSequence](tableName, key.column, event, key, seq)
 }
 
-class DynamoDirectoryEventStream(zone: ZoneId)(runner: DynamoDBAction ~> Task) extends DirectoryEventStream(zone) {
-  import DirectoryEventStreamDynamoMappings._
+object DynamoDirectoryEventStream {
+  import DirectoryEventStreamDynamoMappings.schema
 
-  val TaskToTask = NaturalTransformation.refl[Task]
-
-  val eventStore = new DynamoEventStorage[Task, KK, S, E](schema, runner, TaskToTask)
+  def eventStore(runner: DynamoDBAction ~> Task) =
+    new DynamoEventStorage[Task, ColumnDirectoryId, ColumnTwoPartSequence, DirectoryEvent](
+      schema,
+      runner,
+      NaturalTransformation.refl
+    ).mapKS(
+      ColumnDirectoryId.iso.from,
+      ColumnDirectoryId.iso.to,
+      ColumnTwoPartSequence.iso.from,
+      ColumnTwoPartSequence.iso.to
+    )
 }
 
-object DirectoryIdListUserSnapshotStorage extends MemorySingleSnapshotStorage[Task, DirectoryEventStream.DirectoryId, TwoPartSequence, List[User]]
+object DirectoryIdListUserSnapshotStorage extends MemorySingleSnapshotStorage[Task, DirectoryEventStream.DirectoryId, TwoPartSequence[Long], List[User]]

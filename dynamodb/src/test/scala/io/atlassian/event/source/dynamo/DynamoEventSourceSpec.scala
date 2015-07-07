@@ -22,12 +22,12 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
 
     val key = Column[String]("key")
     val seq = Column[Long]("seq")
-    val value = Column[String]("value")
+    val value = Column[String]("value").column
 
     lazy val tableDefinition =
-      TableDefinition.from[String, String, String, Long](tableName, key, value, key, seq)
+      TableDefinition.from[String, String, String, Long](tableName, key.column, value, key, seq)
 
-    class MyDAO extends DAO[Task](dynamoClient, tableDefinition)
+    class MyDAO extends DAO[Task](tableDefinition)
 
     class DBEventStoreAPI[F[_]](val store: Storage[F])(implicit val M: Monad[F], val C: Catchable[F]) extends API[F]
 

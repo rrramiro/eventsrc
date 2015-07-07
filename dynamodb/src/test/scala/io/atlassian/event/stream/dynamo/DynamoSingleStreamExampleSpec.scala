@@ -40,53 +40,40 @@ class DynamoSingleStreamExampleSpec(val arguments: Arguments) extends SingleStre
   def deleteTestTable() =
     DynamoDBOps.deleteTable(ClientEventStreamDynamoMappings.schema)
 
-  override protected def newEventStream() = new DynamoClientEventStream(1)(runner)
-  override protected def newSnapshotStore() = new ClientIdClientDataSnapshotStorage
+  override protected val eventStore = DynamoClientEventStream.eventStore(runner)
+
+  import SingleStreamExample.Client
+  override protected def snapshotStore = MemorySingleSnapshotStorage[Task, Client.Id, TwoPartSequence[Long], Client.Data]
 
 }
 
 import SingleStreamExample._
 
 object ClientEventStreamDynamoMappings {
+  val key = Column[ColumnSingleStreamKey]("key")
 
-  implicit val TwoPartSeqEncoder: Encoder[TwoPartSequence] =
-    Encoder[NonEmptyBytes].contramap { seq =>
-      ByteVector.fromLong(seq.seq) ++ ByteVector.fromLong(seq.zone) match {
-        case NonEmptyBytes(b) => b
-      }
-    }
+  val seq = Column[ColumnTwoPartSequence]("seq")
 
-  implicit val TwoPartSeqDecoder: Decoder[TwoPartSequence] =
-    Decoder[NonEmptyBytes].mapAttempt { bytes =>
-      if (bytes.bytes.length != 16)
-        Attempt.fail(s"Invalid length of byte vector ${bytes.bytes.length}")
-      else
-        Attempt.safe {
-          bytes.bytes.splitAt(8) match {
-            case (abytes, bbytes) => TwoPartSequence(abytes.toLong(), bbytes.toLong())
-          }
-        }
-    }
-
-  implicit val SingleStreamKeyEncoder: Encoder[SingleStreamKey] =
-    Encoder[String].contramap { _.unwrap }
-  implicit val SingleStreamKeyDecoder: Decoder[SingleStreamKey] =
-    Decoder[String].map { SingleStreamKey.apply }
-
-  val key = Column[SingleStreamKey]("key")
-  val seq = Column[TwoPartSequence]("seq")
-  val event = Column[ClientEvent]("event")
+  val event = Column[ClientEvent]("event").column
   val tableName = s"dynamo_client_event_stream_test_${System.currentTimeMillis}"
-  val schema = TableDefinition.from[SingleStreamKey, ClientEvent, SingleStreamKey, TwoPartSequence](tableName, key, event, key, seq)
+  val schema = TableDefinition.from[ColumnSingleStreamKey, ClientEvent, ColumnSingleStreamKey, ColumnTwoPartSequence](tableName, key.column, event, key, seq)
 
 }
 
-class DynamoClientEventStream(zone: ZoneId)(runner: DynamoDBAction ~> Task) extends ClientEventStream(zone) {
-  import ClientEventStreamDynamoMappings._
+object DynamoClientEventStream {
+  import ClientEventStreamDynamoMappings.schema
 
-  val TaskToTask = NaturalTransformation.refl[Task]
-
-  val eventStore = new DynamoEventStorage[Task, KK, S, E](schema, runner, TaskToTask)
+  def eventStore(runner: DynamoDBAction ~> Task) =
+    new DynamoEventStorage(
+      schema,
+      runner,
+      NaturalTransformation.refl
+    ).mapKS(
+      ColumnSingleStreamKey.iso.from,
+      ColumnSingleStreamKey.iso.to,
+      ColumnTwoPartSequence.iso.from,
+      ColumnTwoPartSequence.iso.to
+    )
 }
 
-class ClientIdClientDataSnapshotStorage extends MemorySingleSnapshotStorage[Task, Client.Id, TwoPartSequence, Client.Data]
+class ClientIdClientDataSnapshotStorage extends MemorySingleSnapshotStorage[Task, Client.Id, TwoPartSequence[Long], Client.Data]

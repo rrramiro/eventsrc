@@ -79,29 +79,21 @@ object SingleStreamExample {
       }
     }
 
-  abstract class ClientEventStream(zone: ZoneId) extends TaskBasedEventStream {
-    type KK = SingleStreamKey
-    type S = TwoPartSequence
-    type E = ClientEvent
-
-    override implicit lazy val S = TwoPartSequence.twoPartSequence(zone)
-
-    class ByKeyQuery(val snapshotStore: SnapshotStorage[Task, Client.Id, TwoPartSequence, Client.Data], val executorService: ExecutorService) extends AsyncRefreshingQueryAPI[Client.Id, Client.Data] {
-      protected def handlePersistLatestSnapshot: SnapshotStorage.Error \/ Snapshot[S, V] => Unit =
-        _.fold(e => println(e), _ => ())
-
-      override val toStreamKey: Client.Id => SingleStreamKey =
-        _ => SingleStreamKey.VAL
-
-      override def acc(key: Client.Id)(s: Snapshot[S, Client.Data], e: Event[KK, S, ClientEvent]): Snapshot[S, Client.Data] =
-        e.process(s) { ov =>
-          {
-            case Insert(k, v) if key == k =>
-              v.some
-            case Delete(k) =>
-              none
-          }
+  def clientEventStream[K](
+    eventStore: EventStorage[Task, SingleStreamKey, K, ClientEvent],
+    snapshotStore: SnapshotStorage[Task, Client.Id, K, Client.Data]
+  ) =
+    QueryAPI[Task, SingleStreamKey, ClientEvent, Client.Id, K, Client.Data](
+      _ => SingleStreamKey.VAL,
+      eventStore,
+      snapshotStore,
+      (key: Client.Id) => (s: Snapshot[K, Client.Data], e: Event[SingleStreamKey, K, ClientEvent]) => e.process(s) { ov =>
+        {
+          case Insert(k, v) if key == k =>
+            v.some
+          case Delete(k) =>
+            none
         }
-    }
-  }
+      }
+    )
 }

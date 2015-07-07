@@ -1,30 +1,25 @@
 package io.atlassian.event
 
-import scalaz.Order
-import scalaz.Ordering
 import scalaz.std.anyVal._
+import scalaz.syntax.monoid._
+import scalaz.syntax.order._
+import scalaz.{ Order, Ordering, Monoid }
 
 /**
  * An example of a sequence that is not a simple number. In this case it is a composite between a sequence number
- * and a 'zone' number that is constant for a given client
+ * and a 'zone' that is constant for a given client
  */
-case class TwoPartSequence(seq: Long, zone: Long)
+case class TwoPartSequence[Z](seq: Long, zone: Z)
 
 object TwoPartSequence {
+  implicit def TwoPartSequenceSequence[Z: Sequence]: Sequence[TwoPartSequence[Z]] =
+    new Sequence[TwoPartSequence[Z]] {
+      def order(x: TwoPartSequence[Z], y: TwoPartSequence[Z]) =
+        x.seq cmp y.seq mappend (x.zone cmp y.zone)
 
-  def twoPartSequence(zone: Long): Sequence[TwoPartSequence] =
-    new Sequence[TwoPartSequence] {
-      override def next(a: TwoPartSequence): TwoPartSequence =
+      val first: TwoPartSequence[Z] = TwoPartSequence(0, Sequence[Z].first)
+
+      def next(a: TwoPartSequence[Z]): TwoPartSequence[Z] =
         a.copy(seq = a.seq + 1)
-
-      override val order: Order[TwoPartSequence] =
-        Order.order { (a, b) =>
-          Order[Long].apply(a.seq, b.seq) match {
-            case Ordering.EQ => Order[Long].apply(a.zone, b.zone)
-            case o => o
-          }
-        }
-
-      override val first: TwoPartSequence = TwoPartSequence(0, zone)
     }
 }

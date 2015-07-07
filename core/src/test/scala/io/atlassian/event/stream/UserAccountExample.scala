@@ -5,8 +5,8 @@ import java.util.concurrent.{ Executors, ExecutorService }
 
 import io.atlassian.event.stream.memory.{ MemoryEventStorage, MemorySingleSnapshotStorage }
 
+import scalaz._
 import scalaz.concurrent.Task
-import scalaz.{ NonEmptyList, \/ }
 import scalaz.std.option._
 import scalaz.syntax.std.option._
 
@@ -37,45 +37,40 @@ object UserAccountExample {
   case class RemoveUserFromGroup(groupId: GroupId, userId: UserId)
     extends UserAccountEvent
 
-  class UserAccountEventStream(val eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent])
-      extends TaskBasedEventStream {
-    type E = UserAccountEvent
-    type S = Long
-    type KK = CompanyId
-    override implicit lazy val S = Sequence[Long]
+  import Event.syntax._
 
-    type Ev = Event[KK, S, E]
+  // Step 2. Define QueryAPIs that match how we want to query/interpret our events
 
-    import Event.syntax._
-
-    // Step 2. Define QueryAPIs that match how we want to query/interpret our events
-    class GroupMembersById(val snapshotStore: SnapshotStorage[Task, CompanyGroupId, S, List[UserId]],
-        val executorService: ExecutorService) extends AsyncRefreshingQueryAPI[CompanyGroupId, List[UserId]] {
-
-      def toStreamKey: CompanyGroupId => CompanyId = _.companyId
-
-      def acc(k: CompanyGroupId)(s: Snapshot[Long, List[UserId]], e: Ev) =
+  def groupMembersByIdQuery(
+    eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent],
+    snapshotStore: SnapshotStorage[Task, CompanyGroupId, Long, List[UserId]]
+  ) =
+    QueryAPI[Task, CompanyId, UserAccountEvent, CompanyGroupId, Long, List[UserId]](
+      _.companyId,
+      eventStore,
+      snapshotStore,
+      (k: CompanyGroupId) => (s: Snapshot[Long, List[UserId]], e: Event[CompanyId, Long, UserAccountEvent]) =>
         e.process(s) { ov =>
           {
             case AddUserToGroup(groupId, userId) if k.groupId == groupId =>
               val currentList = s.value.getOrElse(List())
-              (userId :: currentList.filterNot { _ == userId }).some
+                                                 (userId :: currentList.filterNot { _ == userId }).some
             case RemoveUserFromGroup(groupId, userId) if k.groupId == groupId =>
               val currentList = s.value.getOrElse(List())
               currentList.filterNot { _ == userId }.some
           }
         }
+    )
 
-      protected def handlePersistLatestSnapshot: SnapshotStorage.Error \/ Snapshot[S, V] => Unit =
-        _.fold(e => println(e), _ => ())
-    }
-
-    class UserById(val snapshotStore: SnapshotStorage[Task, CompanyUserId, S, User],
-        val executorService: ExecutorService) extends AsyncRefreshingQueryAPI[CompanyUserId, User] {
-
-      def toStreamKey: CompanyUserId => CompanyId = _.companyId
-
-      def acc(k: CompanyUserId)(s: Snapshot[Long, User], e: Ev) =
+  def userByIdQuery(
+    eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent],
+    snapshotStore: SnapshotStorage[Task, CompanyUserId, Long, User]
+  ) =
+    QueryAPI[Task, CompanyId, UserAccountEvent, CompanyUserId, Long, User](
+      _.companyId,
+      eventStore,
+      snapshotStore,
+      (k: CompanyUserId) => (s: Snapshot[Long, User], e: Event[CompanyId, Long, UserAccountEvent]) =>
         e.process(s) { ov =>
           {
             case InsertUser(id, name, username) if k.userId == id =>
@@ -84,17 +79,17 @@ object UserAccountExample {
               none[User]
           }
         }
+    )
 
-      protected def handlePersistLatestSnapshot: SnapshotStorage.Error \/ Snapshot[S, V] => Unit =
-        _.fold(e => println(e), _ => ())
-    }
-
-    class UserByName(val snapshotStore: SnapshotStorage[Task, CompanyUsername, S, User],
-        val executorService: ExecutorService) extends AsyncRefreshingQueryAPI[CompanyUsername, User] {
-
-      def toStreamKey: CompanyUsername => CompanyId = _.companyId
-
-      def acc(k: CompanyUsername)(s: Snapshot[Long, User], e: Ev) =
+  def userByNameQuery(
+    eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent],
+    snapshotStore: SnapshotStorage[Task, CompanyUsername, Long, User]
+  ) =
+    QueryAPI[Task, CompanyId, UserAccountEvent, CompanyUsername, Long, User](
+      _.companyId,
+      eventStore,
+      snapshotStore,
+      (k: CompanyUsername) => (s: Snapshot[Long, User], e: Event[CompanyId, Long, UserAccountEvent]) =>
         e.process(s) { ov =>
           {
             case InsertUser(id, name, username) if k.username == username =>
@@ -106,26 +101,20 @@ object UserAccountExample {
               }
           }
         }
-
-      protected def handlePersistLatestSnapshot: SnapshotStorage.Error \/ Snapshot[S, V] => Unit =
-        _.fold(e => println(e), _ => ())
-    }
-
-  }
+    )
 
   // Step 3. Define SaveAPIs and a 'data layer' to save events corresponding to entities with constraints
-  trait DataAccess {
-    def saveUser(u: User): Task[SaveResult[Long, User]]
+  trait DataAccess[F[_]] {
+    def saveUser(u: User): F[SaveResult[Long, User]]
   }
 
   object DataAccess {
-    // Because path dependent types work only for functions...
-    def apply(e: UserAccountEventStream)(queryAPI: e.QueryAPI[CompanyUsername, User]): DataAccess =
-      new DataAccess {
-        lazy val saveAPI = new e.SaveAPI[CompanyUsername, User](queryAPI)
-        def saveUser(u: User): Task[SaveResult[Long, User]] = {
+    def apply[F[_]: Monad: Catchable, KK](taskToF: Task ~> F, queryAPI: QueryAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User]): DataAccess[F] =
+      new DataAccess[F] {
+        lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User](taskToF, queryAPI)
+        def saveUser(u: User): F[SaveResult[Long, User]] = {
           val event = InsertUser(u.id.userId, u.name, u.username)
-          val operation = Operation[Long, User, e.E] {
+          val operation = Operation[Long, User, UserAccountEvent] {
             _.value match {
               case None =>
                 Operation.Result.success(event)
@@ -135,7 +124,7 @@ object UserAccountExample {
                 Operation.Result.reject(NonEmptyList(Reason("Duplicate username")))
             }
           }
-          saveAPI.save(CompanyUsername(u.id.companyId, u.username), operation)
+          saveAPI.save(CompanyUsername(u.id.companyId, u.username), operation)(SaveAPIConfig.default)
         }
       }
   }
@@ -144,26 +133,23 @@ object UserAccountExample {
   {
     // 1. Instantiate a stream with an EventStorage
     val eventStore = new MemoryEventStorage[CompanyId, Long, UserAccountEvent]
-    val stream = new UserAccountEventStream(eventStore)
 
     // 2. Create QueryAPIs defined for stream
     // Just use some in-memory snapshot storage for this example
     object UserByIdStorage extends MemorySingleSnapshotStorage[Task, CompanyUserId, Long, User]
     object UserByNameStorage extends MemorySingleSnapshotStorage[Task, CompanyUsername, Long, User]
-    val backgroundSnapshotRefresh = Executors.newCachedThreadPool()
-    val userById = new stream.UserById(UserByIdStorage, backgroundSnapshotRefresh) // QueryAPI[CompanyUserId, User]
-    val userByName = new stream.UserByName(UserByNameStorage, backgroundSnapshotRefresh) // QueryAPI[CompanyUsername, User]
+    val userById = userByIdQuery(eventStore, UserByIdStorage) // QueryAPI[Task, KK, UserAccountEvent, CompanyUsername, Long, User]
+    val userByName = userByNameQuery(eventStore, UserByNameStorage) // QueryAPI[Task, KK, UserAccountEvent, CompanyUsername, Long, User]
 
     // 3. Create SaveAPIs defined for stream. This is done when creating DataAccess which has saveUser with Operation logic
-    val dataLayer = DataAccess(stream)(userByName)
+    val dataLayer = DataAccess[Task, CompanyId](NaturalTransformation.refl, userByName)
 
     val saveAndGetUser: Task[Option[User]] =
       for {
         _ <- dataLayer.saveUser(User(CompanyUserId("abccom", "a"), "Fred", "fred")) // Task[SaveResult[User]]
-        saved <- userById.get(CompanyUserId("abccom", "a"))
+        saved <- userById.get(CompanyUserId("abccom", "a"), QueryConsistency.LatestEvent)
       } yield saved
 
     saveAndGetUser.run // Run it!
   }
-
 }

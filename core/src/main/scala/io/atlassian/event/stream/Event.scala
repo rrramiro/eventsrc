@@ -6,7 +6,11 @@ import org.joda.time.DateTime
 /**
  * Event wraps the event payload with common information (event id and time of the event)
  */
-case class Event[KK, S, E](id: EventId[KK, S], time: DateTime, operation: E)
+case class Event[KK, S, E](id: EventId[KK, S], time: DateTime, operation: E) {
+  // TODO: Monocle
+  def updateId[LL, T](f: EventId[KK, S] => EventId[LL, T]): Event[LL, T, E] =
+    Event(f(id), time, operation)
+}
 
 object Event {
   def next[KK, S: Sequence, E](key: KK, seq: Option[S], op: E): Event[KK, S, E] =

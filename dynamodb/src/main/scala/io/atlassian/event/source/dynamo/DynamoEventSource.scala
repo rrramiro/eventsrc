@@ -25,9 +25,13 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
 
   case class DAOConfig(queryConsistency: ReadConsistency = ReadConsistency.Eventual)
 
-  abstract class DAO[F[_]](awsClient: DynamoClient, tableDef: TableDefinition[KK, VV, KK, S], config: DAOConfig = DAOConfig())(
+  abstract class DAO[F[_]](tableDef: TableDefinition[KK, VV, KK, S], config: DAOConfig = DAOConfig())(
       implicit M: Monad[F],
       C: Catchable[F],
+      EKK: Encoder[KK],
+      DKK: Decoder[KK],
+      ES: Encoder[S],
+      DS: Decoder[S],
       runAction: DynamoDBAction ~> Task,
       ToF: Task ~> F) extends Storage[F] {
 
@@ -37,9 +41,9 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
       implicit val transformOpEncoder: Encoder[Transform.Op] =
         Encoder[String].contramap(Transform.Op.apply)
 
-      val eventId = Column.compose2[EventId](tableDef.hash, tableDef.range) { case EventId(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
-      val lastModified = Column[DateTime]("LastModifiedTimestamp")
-      val transform = Column.compose2[Transform[VV]](Column[Transform.Op]("Operation"), tableDef.value.liftOption) {
+      val eventId = Column.compose2[EventId](tableDef.hash.column, tableDef.range.column) { case EventId(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
+      val lastModified = Column[DateTime]("LastModifiedTimestamp").column
+      val transform = Column.compose2[Transform[VV]](Column[Transform.Op]("Operation").column, tableDef.value.liftOption) {
         case Transform.Delete => (Transform.Op.Delete, None)
         case Transform.Insert(v) => (Transform.Op.Insert, Some(v))
       } {
@@ -60,7 +64,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
     val interpret: table.DBAction ~> Task =
       runAction compose
         table.transform(DynamoDB.interpreter(table)(
-          TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)(tableDef.hash.decoder, tableDef.range.decoder)))
+          TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)))
 
     import scalaz.syntax.monad._
 

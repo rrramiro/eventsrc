@@ -1,21 +1,31 @@
 package io.atlassian.event
 
-import scalaz.Order
+import scalaz.{ Enum, Monoid, Order }
 import scalaz.std.anyVal._
+import scalaz.syntax.monoid._
+import scalaz.syntax.enum._
 
-trait Sequence[A] {
+/**
+ * TODO: Write some ScalaCheck properties.
+ *
+ * forall a. first <= a
+ * forall a. next(a) > a
+ */
+trait Sequence[A] extends Order[A] {
   def first: A
   def next(a: A): A
-  def order: Order[A]
 }
 
 object Sequence {
   def apply[S: Sequence] =
     implicitly[Sequence[S]]
 
-  implicit object LongSequence extends Sequence[Long] {
-    val first = 0L
-    def next(s: Long): Long = s + 1
-    val order: Order[Long] = Order[Long]
-  }
+  def fromMonoidEnum[S: Monoid: Enum]: Sequence[S] =
+    new Sequence[S] {
+      def order(x: S, y: S) = Order[S].order(x, y)
+      def first = mzero[S]
+      def next(s: S) = s.succ
+    }
+
+  implicit val longSequence: Sequence[Long] = fromMonoidEnum
 }
