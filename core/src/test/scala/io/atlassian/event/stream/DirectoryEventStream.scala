@@ -58,8 +58,8 @@ object DirectoryEventStream {
               m.get(key._2).fold(
                 Snapshot.deleted[TwoPartSequence[Long], UserId](id, t)
               ) { uid =>
-                Snapshot.value(uid)(id, t)
-              },
+                  Snapshot.value(uid)(id, t)
+                },
             (id, t) => Snapshot.deleted(id, t)
           ) // This should not happen
       }

@@ -24,8 +24,15 @@ class MemoryEventStorage[KK, S: Sequence, E] extends EventStorage[Task, KK, S, E
 
   override def put(ev: Event[KK, S, E]): Task[EventStreamError \/ Event[KK, S, E]] =
     Task.delay {
-      // Just assume there are no duplicates for this test and that everything is ordered when I get it
-      map += (ev.id.key -> (ev :: map.getOrElse(ev.id.key, Nil)))
-      ev.right
+      map.synchronized {
+        val currentList = map.getOrElse(ev.id.key, Nil)
+        currentList match {
+          case h :: hs if h.id.seq >= ev.id.seq =>
+            EventStreamError.DuplicateEvent.left
+          case _ =>
+            map += (ev.id.key -> (ev :: currentList))
+            ev.right
+        }
+      }
     }
 }

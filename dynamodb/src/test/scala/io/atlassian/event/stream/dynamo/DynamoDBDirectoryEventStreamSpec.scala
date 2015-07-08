@@ -50,7 +50,6 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
 
 import DirectoryEventStream._
 
-
 object DirectoryEventStreamDynamoMappings {
   implicit val DirectoryEventEncodeJson: EncodeJson[DirectoryEvent] =
     EncodeJson {
