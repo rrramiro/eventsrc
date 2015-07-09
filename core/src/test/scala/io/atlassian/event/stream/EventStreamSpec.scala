@@ -5,7 +5,7 @@ import io.atlassian.event.stream.DirectoryEventStream.DirectoryId
 import org.scalacheck.Prop
 import org.specs2.{ ScalaCheck, SpecificationWithJUnit }
 
-import scalaz.\/
+import scalaz.{ \/, OptionT }
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.syntax.either._
@@ -43,5 +43,7 @@ object AlwaysFailingDirectoryEventStream {
       Task {
         EventStreamError.duplicate.left
       }
+
+    def latest(key: DirectoryId) = OptionT.none
   }
 }

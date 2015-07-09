@@ -2,6 +2,7 @@ package io.atlassian.event
 package stream
 
 import org.scalacheck.Prop
+import org.specs2.execute.AsResult
 
 import scalaz.concurrent.{ Strategy, Task }
 import Operation.syntax._
@@ -9,59 +10,81 @@ import Operation.syntax._
 abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
   import SingleStreamExample._
 
+  private[this] val NUM_TESTS = 100
+
   def is =
     s2"""
          This spec tests a single event stream case
 
-         Add and get works    $addAndGetClientById
-         Add and delete works $addAndDelete
-         Add multiple         $addClients
-         Delete multiple      $deleteClients
+         Add and get works    ${addAndGetClientById(NUM_TESTS)}
+         Add and delete works ${addAndDelete(NUM_TESTS)}
+         Add multiple         ${addClients(NUM_TESTS)}
+         Delete multiple      ${deleteClients(NUM_TESTS)}
     """
 
-  protected def eventStore: EventStorage[Task, SingleStreamKey, TwoPartSequence[Long], ClientEvent]
-  protected def snapshotStore: SnapshotStorage[Task, Client.Id, TwoPartSequence[Long], Client.Data]
+  type Q = QueryAPI[Task, SingleStreamKey, ClientEvent, Client.Id, TwoPartSequence[Long], Client.Data]
+  type S = SaveAPI[Task, SingleStreamKey, ClientEvent, Client.Id, TwoPartSequence[Long]]
 
-  private[this] def query = SingleStreamExample.clientEventStream(eventStore, snapshotStore)
-  private[this] def saveApi = SingleStreamExample.saveAPI(query)
+  type ES = EventStorage[Task, SingleStreamKey, TwoPartSequence[Long], ClientEvent]
+  type SS = SnapshotStorage[Task, Client.Id, TwoPartSequence[Long], Client.Data]
 
-  def addAndGetClientById = Prop.forAll { (k: Client.Id, c: Client.Data) =>
-    (for {
-      x <- saveApi.save(k, ClientEvent.insert(k, c).op[TwoPartSequence[Long], Client.Data])(SaveAPIConfig.default)
-      saved <- query.get(k, QueryConsistency.LatestEvent)
-    } yield saved).run.get === c
+  def getEventStore: Task[ES]
+  def getSnapshotStore: Task[SS]
+
+  def mkTest(f: (Q, S) => Prop) = (minTests: Int) =>
+    taskTest {
+      for {
+        eventStore <- getEventStore
+        snapshotStore <- getSnapshotStore
+        query = SingleStreamExample.clientEventStream(eventStore, snapshotStore)
+        save = DirectoryEventStream.allUsersSaveAPI(query)
+      } yield f(query, save).set(minTestsOk = minTests)
+    }
+
+  val addAndGetClientById = mkTest { (q, s) =>
+    Prop.forAll { (k: Client.Id, c: Client.Data) =>
+      (for {
+         _ <- s.save(k, ClientEvent.insert(k, c).op[TwoPartSequence[Long]])(SaveAPIConfig.default)
+         saved <- q.get(k, QueryConsistency.LatestEvent)
+       } yield saved) must returnValue(beSome(c))
+    }
   }
 
-  def addAndDelete = Prop.forAll { (k: Client.Id, c: Client.Data) =>
-    (for {
-      _ <- saveApi.save(k, ClientEvent.insert(k, c).op)(SaveAPIConfig.default)
-      _ <- saveApi.save(k, ClientEvent.delete(k).op)(SaveAPIConfig.default)
-      saved <- query.get(k, QueryConsistency.LatestEvent)
-    } yield saved).run must beNone
+  val addAndDelete = mkTest { (q, s) =>
+    Prop.forAll { (k: Client.Id, c: Client.Data) =>
+      (for {
+         _ <- s.save(k, ClientEvent.insert(k, c).op)(SaveAPIConfig.default)
+         _ <- s.save(k, ClientEvent.delete(k).op)(SaveAPIConfig.default)
+         saved <- q.get(k, QueryConsistency.LatestEvent)
+       } yield saved) must returnValue(beNone)
+    }
   }
 
-  def addClients = Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
-    val expected = (Some(d1), Some(d2))
-    (for {
-      _ <- saveApi.save(c1, Operation.insert(Insert(c1, d1)))(SaveAPIConfig.default)
-      _ <- saveApi.save(c2, Operation.insert(Insert(c2, d2)))(SaveAPIConfig.default)
-      read1 <- query.get(c1, QueryConsistency.LatestEvent)
-      read2 <- query.get(c2, QueryConsistency.LatestEvent)
-    } yield (read1, read2)).run === expected
+  def addClients = mkTest { (q, s) =>
+    Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
+      val expected = (Some(d1), Some(d2))
+      (for {
+        _ <- s.save(c1, Operation.insert(Insert(c1, d1)))(SaveAPIConfig.default)
+        _ <- s.save(c2, Operation.insert(Insert(c2, d2)))(SaveAPIConfig.default)
+        read1 <- q.get(c1, QueryConsistency.LatestEvent)
+        read2 <- q.get(c2, QueryConsistency.LatestEvent)
+      } yield (read1, read2)) must returnValue(expected)
+    }
   }
 
-  def deleteClients = Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
-    val expected = (Some(d1), None, Some(d2), None)
-    (for {
-      _ <- saveApi.save(c1, Operation.insert(Insert(c1, d1)))(SaveAPIConfig.default)
-      v1 <- query.get(c1, QueryConsistency.LatestEvent)
-      _ <- saveApi.save(c1, Operation.insert(Delete(c1)))(SaveAPIConfig.default)
-      v2 <- query.get(c1, QueryConsistency.LatestEvent)
-      _ <- saveApi.save(c2, Operation.insert(Insert(c2, d2)))(SaveAPIConfig.default)
-      v3 <- query.get(c2, QueryConsistency.LatestEvent)
-      _ <- saveApi.save(c2, Operation.insert(Delete(c2)))(SaveAPIConfig.default)
-      v4 <- query.get(c2, QueryConsistency.LatestEvent)
-    } yield (v1, v2, v3, v4)).run === expected
+  def deleteClients = mkTest { (q, s) =>
+    Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
+      val expected = (Some(d1), None, Some(d2), None)
+      (for {
+         _ <- s.save(c1, Operation.insert(Insert(c1, d1)))(SaveAPIConfig.default)
+         v1 <- q.get(c1, QueryConsistency.LatestEvent)
+         _ <- s.save(c1, Operation.insert(Delete(c1)))(SaveAPIConfig.default)
+         v2 <- q.get(c1, QueryConsistency.LatestEvent)
+         _ <- s.save(c2, Operation.insert(Insert(c2, d2)))(SaveAPIConfig.default)
+         v3 <- q.get(c2, QueryConsistency.LatestEvent)
+         _ <- s.save(c2, Operation.insert(Delete(c2)))(SaveAPIConfig.default)
+         v4 <- q.get(c2, QueryConsistency.LatestEvent)
+       } yield (v1, v2, v3, v4)) must returnValue(expected)
+    }
   }
-
 }

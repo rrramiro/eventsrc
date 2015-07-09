@@ -107,4 +107,13 @@ class DynamoEventStorage[F[_], KK, S, E](
         case Insert.Failed => EventStreamError.DuplicateEvent.left[EV].point[F]
       }
     } yield r
+
+  def latest(key: KK): OptionT[F, Event[KK, S, E]] = {
+    def runQuery[A](q: table.Query, f: Page[S, EV] => Option[A]) =
+      OptionT(ToF(interpret(table.query(q)).map(f)))
+
+    val config = table.Query.Config(direction = ScanDirection.Descending, limit = Some(1))
+    val hashQuery = table.Query.hash(key, config)
+    runQuery(hashQuery, _.result.headOption)
+  }
 }

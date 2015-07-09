@@ -5,8 +5,6 @@ package memory
 import scalaz.concurrent.Task
 
 class InMemoryDirectoryEventStreamSpec extends DirectoryEventStreamSpec {
-  override protected val eventStore = new MemoryEventStorage[DirectoryEventStream.DirectoryId, TwoPartSequence[Long], DirectoryEvent]
-  override protected def allUserSnapshot() = DirectoryIdListUserSnapshotStorage
+  val getEventStore = MemoryEventStorage[DirectoryEventStream.DirectoryId, TwoPartSequence[Long], DirectoryEvent]
+  val getAllUserSnapshot = MemorySingleSnapshotStorage[DirectoryEventStream.DirectoryId, TwoPartSequence[Long], List[User]]
 }
-
-object DirectoryIdListUserSnapshotStorage extends MemorySingleSnapshotStorage[Task, DirectoryEventStream.DirectoryId, TwoPartSequence[Long], List[User]]

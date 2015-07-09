@@ -2,32 +2,31 @@ package io.atlassian.event
 package stream
 package memory
 
-import scalaz.{ Applicative, \/ }
+import scalaz.concurrent.Task
 import scalaz.syntax.either._
+import scalaz.{ Applicative, \/ }
 
 /**
  * Basic implementation of SnapshotStorage that stores a single (latest) snapshot in memory.
  */
 object MemorySingleSnapshotStorage {
-  def apply[F[_], K, S, V](implicit A: Applicative[F]): SnapshotStorage[F, K, S, V] =
-    new MemorySingleSnapshotStorage[F, K, S, V]()
-}
+  def apply[K, S, V] = Task.delay {
+    val map = collection.concurrent.TrieMap[K, Snapshot[S, V]]()
 
-class MemorySingleSnapshotStorage[F[_], K, S, V](implicit A: Applicative[F]) extends SnapshotStorage[F, K, S, V] {
-  private val map = collection.concurrent.TrieMap[K, Snapshot[S, V]]()
+    new SnapshotStorage[Task, K, S, V] {
+      override def get(key: K, sequence: SequenceQuery[S]): Task[Snapshot[S, V]] =
+        Task.delay {
+          sequence.fold(
+            { _ => Snapshot.zero },
+            Snapshot.zero,
+            map.getOrElse(key, Snapshot.zero))
+        }
 
-  override def get(key: K, sequence: SequenceQuery[S]): F[Snapshot[S, V]] =
-    A.point {
-      sequence.fold(
-        { _ => Snapshot.zero },
-        Snapshot.zero,
-        map.getOrElse(key, Snapshot.zero)
-      )
+      override def put(snapshotKey: K, snapshot: Snapshot[S, V], mode: SnapshotStoreMode): Task[SnapshotStorage.Error \/ Snapshot[S, V]] =
+        Task.delay {
+          map += (snapshotKey -> snapshot)
+          snapshot.right
+        }
     }
-
-  override def put(snapshotKey: K, snapshot: Snapshot[S, V], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
-    A.point {
-      map += (snapshotKey -> snapshot)
-      snapshot.right
-    }
+  }
 }

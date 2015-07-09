@@ -7,7 +7,7 @@ object Dependencies {
     val scalaz        = "7.1.2"
     val scalazStream  = "0.7a"
     val argonaut      = "6.1"
-    val awsScala      = "3.0.0"
+    val awsScala      = "3.0.1-SNAPSHOT"
     val kadai         = "3.3.0"
     val specs2        = "3.6"
     val scalacheck    = "1.12.2"
@@ -41,11 +41,12 @@ object Dependencies {
 
   lazy val test =
     Seq(
-      "org.specs2"          %% "specs2-core"        % Version.specs2      % "test"
-    , "org.specs2"          %% "specs2-junit"       % Version.specs2      % "test"
-    , "org.specs2"          %% "specs2-scalacheck"  % Version.specs2      % "test"
-    , "org.scalacheck"      %% "scalacheck"         % Version.scalacheck  % "test"
-    , "junit"               %  "junit"              % Version.junit       % "test"
+      "org.specs2"          %% "specs2-core"          % Version.specs2      % "test"
+    , "org.specs2"          %% "specs2-junit"         % Version.specs2      % "test"
+    , "org.specs2"          %% "specs2-scalacheck"    % Version.specs2      % "test"
+    , "org.specs2"          %% "specs2-matcher-extra" % Version.specs2      % "test"
+    , "org.scalacheck"      %% "scalacheck"           % Version.scalacheck  % "test"
+    , "junit"               %  "junit"                % Version.junit       % "test"
     )
 
   lazy val common = scalaz ++ kadai ++ test

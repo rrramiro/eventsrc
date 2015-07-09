@@ -10,17 +10,15 @@ import org.specs2.main.Arguments
 
 import scalaz._
 import scalaz.concurrent.Task
+import scalaz.syntax.applicative._
 
 class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends DirectoryEventStreamSpec with LocalDynamoDB with DynamoDBActionMatchers {
 
   override def is =
     s2"""
         DirectoryEventStream supports                               ${step(startLocalDynamoDB)} ${step(createTestTable)}
-          Adding multiple users (store list of users)               ${addMultipleUsers.set(minTestsOk = NUM_TESTS)}
-          Checking for duplicate usernames (store list of users)    ${duplicateUsername.set(minTestsOk = NUM_TESTS)}
-          Adding multiple users (store list of users and snapshot)  ${addMultipleUsersWithSnapshot.set(minTestsOk = NUM_TESTS)}
 
-          Checking for duplicate usernames with sharded store       ${duplicateUsernameSharded.set(minTestsOk = NUM_TESTS)}
+          Adding multiple users (store list of users)               ${addMultipleUsers(NUM_TESTS)}
 
                                                                     ${step(deleteTestTable)}
                                                                     ${step(stopLocalDynamoDB)}
@@ -43,9 +41,8 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
   def deleteTestTable() =
     DynamoDBOps.deleteTable(DirectoryEventStreamDynamoMappings.schema)
 
-  override protected val eventStore = DynamoDirectoryEventStream.eventStore(runner)
-  override protected def allUserSnapshot() = DirectoryIdListUserSnapshotStorage
-
+  val getEventStore = DynamoDirectoryEventStream.eventStore(runner).point[Task]
+  val getAllUserSnapshot = MemorySingleSnapshotStorage[DirectoryEventStream.DirectoryId, TwoPartSequence[Long], List[User]]
 }
 
 import DirectoryEventStream._
@@ -88,5 +85,3 @@ object DynamoDirectoryEventStream {
       ColumnTwoPartSequence.iso.to
     )
 }
-
-object DirectoryIdListUserSnapshotStorage extends MemorySingleSnapshotStorage[Task, DirectoryEventStream.DirectoryId, TwoPartSequence[Long], List[User]]
