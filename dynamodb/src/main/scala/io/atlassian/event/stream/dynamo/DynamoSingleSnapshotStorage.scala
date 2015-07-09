@@ -19,8 +19,7 @@ object WrappedKey {
 
 case class DynamoSingleSnapshotStorage[F[_], KK, S, VV](
   tableDefinition: TableDefinition[WrappedKey[KK], Snapshot[S, VV], KK, String],
-  snapshotStore: SnapshotStorage[F, KK, S, VV]
-)
+  snapshotStore: SnapshotStorage[F, KK, S, VV])
 
 object DynamoSingleSnapshotStorage {
   /**
@@ -84,7 +83,7 @@ object DynamoSingleSnapshotStorage {
         mode.fold(snapshot.right.point[F],
           interpret.apply(table.put(WrappedKey.onlyKey(snapshotKey), snapshot)).map { _ => snapshot.right }
         )
-      }
+    }
 
     DynamoSingleSnapshotStorage(
       tableDefinition,

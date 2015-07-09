@@ -23,7 +23,7 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
   protected def snapshotStore: SnapshotStorage[Task, Client.Id, TwoPartSequence[Long], Client.Data]
 
   private[this] def query = SingleStreamExample.clientEventStream(eventStore, snapshotStore)
-  private[this] def saveApi = DirectoryEventStream.allUsersSaveAPI(query)
+  private[this] def saveApi = SingleStreamExample.saveAPI(query)
 
   def addAndGetClientById = Prop.forAll { (k: Client.Id, c: Client.Data) =>
     (for {

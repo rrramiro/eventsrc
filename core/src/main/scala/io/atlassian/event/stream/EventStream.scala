@@ -11,9 +11,9 @@ import scalaz.syntax.all._
 import scalaz.syntax.std.option._
 
 /**
-  * EventStreamError represents any error conditions that are useful to represent for event sources. In particular,
-  * we need to know about attempts to store duplicate events.
-  */
+ * EventStreamError represents any error conditions that are useful to represent for event sources. In particular,
+ * we need to know about attempts to store duplicate events.
+ */
 sealed trait EventStreamError
 object EventStreamError {
   def noop: EventStreamError = Noop
@@ -50,11 +50,10 @@ object QueryConsistency {
 case class LatestSnapshotResult[S, V](latest: Snapshot[S, V], previousPersisted: Snapshot[S, V])
 
 case class QueryAPI[F[_], KK, E, K, S, V](
-  toStreamKey: K => KK,
-  eventStore: EventStorage[F, KK, S, E],
-  snapshotStore: SnapshotStorage[F, K, S, V],
-  acc: K => (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]
-) {
+    toStreamKey: K => KK,
+    eventStore: EventStorage[F, KK, S, E],
+    snapshotStore: SnapshotStorage[F, K, S, V],
+    acc: K => (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]) {
   /**
    * Return the current view of the data for key 'key'
    */
@@ -171,9 +170,9 @@ case class QueryAPI[F[_], KK, E, K, S, V](
     } yield saveResult
 
   /**
-    * Save the given `snapshot` if it is at a different sequence number to `previousSnapshot`. Set `previousSnapshot`
-    * to None to force a save.
-    */
+   * Save the given `snapshot` if it is at a different sequence number to `previousSnapshot`. Set `previousSnapshot`
+   * to None to force a save.
+   */
   def persistSnapshot(key: K, snapshot: Snapshot[S, V], previousSnapshot: Option[Snapshot[S, V]])(implicit F: Applicative[F]): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
     if (snapshot.seq != previousSnapshot.map { _.seq })
       snapshotStore.put(key, snapshot, SnapshotStoreMode.Cache)
@@ -188,9 +187,8 @@ object SaveAPIConfig {
 }
 
 case class SaveAPI[F[_], KK, E, K, S, V](
-  taskToF: Task ~> F,
-  query: QueryAPI[F, KK, E, K, S, V]
-) {
+    taskToF: Task ~> F,
+    query: QueryAPI[F, KK, E, K, S, V]) {
   // TODO: Maybe just make a MonadTask trait and use it as a constraint.
   private def saveWithRetry(key: K, operation: Operation[S, V, E], durations: Seq[Duration])(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S, V]] =
     durations match {

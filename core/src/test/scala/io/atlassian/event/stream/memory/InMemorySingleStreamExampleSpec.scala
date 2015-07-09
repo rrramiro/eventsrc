@@ -7,8 +7,7 @@ import SingleStreamExample._
 import scalaz.concurrent.Task
 
 class InMemorySingleStreamExampleSpec extends SingleStreamExampleSpec {
-  // TODO: Changing this to a val breaks things. Really not good.
-  override protected def eventStore = new MemoryEventStorage[SingleStreamKey, TwoPartSequence[Long], ClientEvent]
+  override protected val eventStore = new MemoryEventStorage[SingleStreamKey, TwoPartSequence[Long], ClientEvent]
   override protected val snapshotStore = new ClientIdClientDataSnapshotStorage
 }
 

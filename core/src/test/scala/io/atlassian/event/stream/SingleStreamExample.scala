@@ -1,12 +1,10 @@
 package io.atlassian.event
 package stream
 
-import java.util.concurrent.ExecutorService
-
 import org.scalacheck.{ Gen, Arbitrary }
 import Arbitrary.arbitrary
 
-import scalaz.{ \/, @@ }
+import scalaz.{ NaturalTransformation, @@ }
 import Event.syntax._
 import scalaz.concurrent.Task
 import scalaz.std.option._
@@ -81,8 +79,7 @@ object SingleStreamExample {
 
   def clientEventStream[K](
     eventStore: EventStorage[Task, SingleStreamKey, K, ClientEvent],
-    snapshotStore: SnapshotStorage[Task, Client.Id, K, Client.Data]
-  ) =
+    snapshotStore: SnapshotStorage[Task, Client.Id, K, Client.Data]) =
     QueryAPI[Task, SingleStreamKey, ClientEvent, Client.Id, K, Client.Data](
       _ => SingleStreamKey.VAL,
       eventStore,
@@ -91,9 +88,16 @@ object SingleStreamExample {
         {
           case Insert(k, v) if key == k =>
             v.some
-          case Delete(k) =>
+          case Delete(k) if key == k =>
             none
         }
       }
     )
+
+  def saveAPI[KK, E, K, S, V](query: QueryAPI[Task, KK, E, K, S, V]) =
+    SaveAPI(
+      NaturalTransformation.refl,
+      query
+    )
+
 }

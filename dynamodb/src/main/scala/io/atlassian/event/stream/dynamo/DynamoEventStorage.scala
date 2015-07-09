@@ -33,12 +33,12 @@ class DynamoEventStorage[F[_], KK, S, E](
         DS: Decoder[S],
         C: Catchable[F]) extends EventStorage[F, KK, S, E] {
 
-  private[dynamo] type EID = EventId[KK, S]
+  private[dynamo]type EID = EventId[KK, S]
   private[dynamo] object EID {
     def apply(k: KK, s: S): EID = EventId[KK, S](k, s)
     def unapply(e: EID): Option[(KK, S)] = EventId.unapply[KK, S](e)
   }
-  private[dynamo] type EV = Event[KK, S, E]
+  private[dynamo]type EV = Event[KK, S, E]
 
   private object table extends Table {
     type K = EID
