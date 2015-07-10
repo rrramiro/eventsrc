@@ -53,7 +53,8 @@ case class QueryAPI[F[_], KK, E, K, S, V](
     toStreamKey: K => KK,
     eventStore: EventStorage[F, KK, S, E],
     snapshotStore: SnapshotStorage[F, K, S, V],
-    acc: K => (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]) {
+    acc: K => (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]
+) {
   /**
    * Return the current view of the data for key 'key'
    */
@@ -141,9 +142,11 @@ case class QueryAPI[F[_], KK, E, K, S, V](
    * @param events The stream of events.
    * @return Container F that when executed provides the snapshot.
    */
-  private def snapshotFold(start: Snapshot[S, V],
+  private def snapshotFold(
+    start: Snapshot[S, V],
     events: Process[F, Event[KK, S, E]],
-    f: (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V])(implicit F: Monad[F], FC: Catchable[F]): F[Snapshot[S, V]] =
+    f: (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]
+  )(implicit F: Monad[F], FC: Catchable[F]): F[Snapshot[S, V]] =
     events.pipe {
       process1.fold(start)(f)
     }.runLastOr(start)
@@ -188,7 +191,8 @@ object SaveAPIConfig {
 
 case class SaveAPI[F[_], KK, E, K, S, V](
     taskToF: Task ~> F,
-    query: QueryAPI[F, KK, E, K, S, V]) {
+    query: QueryAPI[F, KK, E, K, S, V]
+) {
   // TODO: Maybe just make a MonadTask trait and use it as a constraint.
   private def saveWithRetry(key: K, operation: Operation[S, V, E], durations: Seq[Duration])(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S, V]] =
     durations match {

@@ -26,14 +26,16 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
   case class DAOConfig(queryConsistency: ReadConsistency = ReadConsistency.Eventual)
 
   abstract class DAO[F[_]](tableDef: TableDefinition[KK, VV, KK, S], config: DAOConfig = DAOConfig())(
-      implicit M: Monad[F],
+      implicit
+      M: Monad[F],
       C: Catchable[F],
       EKK: Encoder[KK],
       DKK: Decoder[KK],
       ES: Encoder[S],
       DS: Decoder[S],
       runAction: DynamoDBAction ~> Task,
-      ToF: Task ~> F) extends Storage[F] {
+      ToF: Task ~> F
+  ) extends Storage[F] {
 
     object Columns {
       implicit val transformOpDecoder: Decoder[Transform.Op] =
@@ -64,7 +66,8 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
     val interpret: table.DBAction ~> Task =
       runAction compose
         table.transform(DynamoDB.interpreter(table)(
-          TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)))
+          TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)
+        ))
 
     import scalaz.syntax.monad._
 
