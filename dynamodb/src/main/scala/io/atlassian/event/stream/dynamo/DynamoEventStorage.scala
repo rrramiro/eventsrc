@@ -25,13 +25,16 @@ import scalaz.syntax.monad._
 class DynamoEventStorage[F[_], KK, S, E](
     tableDef: TableDefinition[KK, E, KK, S],
     runAction: DynamoDBAction ~> Task,
-    ToF: Task ~> F)(
-        implicit M: Monad[F],
-        EKK: Encoder[KK],
-        DKK: Decoder[KK],
-        ES: Encoder[S],
-        DS: Decoder[S],
-        C: Catchable[F]) extends EventStorage[F, KK, S, E] {
+    ToF: Task ~> F
+)(
+    implicit
+    M: Monad[F],
+    EKK: Encoder[KK],
+    DKK: Decoder[KK],
+    ES: Encoder[S],
+    DS: Decoder[S],
+    C: Catchable[F]
+) extends EventStorage[F, KK, S, E] {
 
   private[dynamo]type EID = EventId[KK, S]
   private[dynamo] object EID {

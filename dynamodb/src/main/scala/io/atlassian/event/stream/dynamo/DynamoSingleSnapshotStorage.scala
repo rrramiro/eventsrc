@@ -19,7 +19,8 @@ object WrappedKey {
 
 case class DynamoSingleSnapshotStorage[F[_], KK, S, VV](
   tableDefinition: TableDefinition[WrappedKey[KK], Snapshot[S, VV], KK, String],
-  snapshotStore: SnapshotStorage[F, KK, S, VV])
+  snapshotStore: SnapshotStorage[F, KK, S, VV]
+)
 
 object DynamoSingleSnapshotStorage {
   /**
@@ -74,13 +75,15 @@ object DynamoSingleSnapshotStorage {
           table.transform(DynamoDB.interpreter(table)(tableDefinition))
 
       override def get(key: KK, sequence: SequenceQuery[S]): F[Snapshot[S, VV]] =
-        sequence.fold({ _ => Snapshot.zero[S, VV].point[F] },
+        sequence.fold(
+          { _ => Snapshot.zero[S, VV].point[F] },
           Snapshot.zero.point[F],
           interpret.apply(table.get(WrappedKey.onlyKey(key))).map { _ | Snapshot.zero }
         )
 
       override def put(snapshotKey: KK, snapshot: Snapshot[S, VV], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[S, VV]] =
-        mode.fold(snapshot.right.point[F],
+        mode.fold(
+          snapshot.right.point[F],
           interpret.apply(table.put(WrappedKey.onlyKey(snapshotKey), snapshot)).map { _ => snapshot.right }
         )
     }

@@ -21,7 +21,8 @@ class MemorySingleSnapshotStorage[F[_], K, S, V](implicit A: Applicative[F]) ext
       sequence.fold(
         { _ => Snapshot.zero },
         Snapshot.zero,
-        map.getOrElse(key, Snapshot.zero))
+        map.getOrElse(key, Snapshot.zero)
+      )
     }
 
   override def put(snapshotKey: K, snapshot: Snapshot[S, V], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
