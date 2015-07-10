@@ -36,15 +36,8 @@ object DirectoryEventStream {
     import DataValidator._
     import Operation.syntax._
 
-    def addUniqueUser(u: User): Operation[TwoPartSequence[Long], List[User], DirectoryEvent] =
-      DirectoryEvent.addUser(u).op[TwoPartSequence[Long], List[User]].filter { noDuplicateUsername(u) }
-
-    private def noDuplicateUsername(u: User): DataValidator.Validator[List[User]] =
-      ol =>
-        if ((ol | Nil).exists { _.username == u.username })
-          "User with same username already exists".fail
-        else
-          DataValidator.success
+    def addUser(u: User): Operation[TwoPartSequence[Long], DirectoryEvent] =
+      DirectoryEvent.addUser(u).op[TwoPartSequence[Long]]
   }
 
   val shardedUsernameSnapshotStore = new SnapshotStorage[Task, DirectoryUsername, TwoPartSequence[Long], UserId] {
@@ -126,7 +119,8 @@ object DirectoryEventStream {
   def allUsersSaveAPI[KK, E, K, S, V](query: QueryAPI[Task, KK, E, K, S, V]) =
     SaveAPI(
       NaturalTransformation.refl,
-      query
+      query.toStreamKey,
+      query.eventStore
     )
 }
 

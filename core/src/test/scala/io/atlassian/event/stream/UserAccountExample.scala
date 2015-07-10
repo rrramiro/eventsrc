@@ -102,24 +102,17 @@ object UserAccountExample {
 
   // Step 3. Define SaveAPIs and a 'data layer' to save events corresponding to entities with constraints
   trait DataAccess[F[_]] {
-    def saveUser(u: User): F[SaveResult[Long, User]]
+    def saveUser(u: User): F[SaveResult[Long]]
   }
 
   object DataAccess {
     def apply[F[_]: Monad: Catchable, KK](taskToF: Task ~> F, queryAPI: QueryAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User]): DataAccess[F] =
       new DataAccess[F] {
-        lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User](taskToF, queryAPI)
-        def saveUser(u: User): F[SaveResult[Long, User]] = {
+        lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long](taskToF, queryAPI.toStreamKey, queryAPI.eventStore)
+        def saveUser(u: User): F[SaveResult[Long]] = {
           val event = InsertUser(u.id.userId, u.name, u.username)
-          val operation = Operation[Long, User, UserAccountEvent] {
-            _.value match {
-              case None =>
-                Operation.Result.success(event)
-              case Some(x) if u.id == x.id =>
-                Operation.Result.success(event)
-              case _ =>
-                Operation.Result.reject(NonEmptyList(Reason("Duplicate username")))
-            }
+          val operation = Operation[Long, UserAccountEvent] { _ =>
+            Operation.Result.success(event)
           }
           saveAPI.save(CompanyUsername(u.id.companyId, u.username), operation)(SaveAPIConfig.default)
         }
@@ -128,21 +121,21 @@ object UserAccountExample {
 
   // Step 4. Bring it all together
   {
-    // 1. Instantiate a stream with an EventStorage
-    val eventStore = new MemoryEventStorage[CompanyId, Long, UserAccountEvent]
-
-    // 2. Create QueryAPIs defined for stream
-    // Just use some in-memory snapshot storage for this example
-    object UserByIdStorage extends MemorySingleSnapshotStorage[Task, CompanyUserId, Long, User]
-    object UserByNameStorage extends MemorySingleSnapshotStorage[Task, CompanyUsername, Long, User]
-    val userById = userByIdQuery(eventStore, UserByIdStorage) // QueryAPI[Task, KK, UserAccountEvent, CompanyUsername, Long, User]
-    val userByName = userByNameQuery(eventStore, UserByNameStorage) // QueryAPI[Task, KK, UserAccountEvent, CompanyUsername, Long, User]
-
-    // 3. Create SaveAPIs defined for stream. This is done when creating DataAccess which has saveUser with Operation logic
-    val dataLayer = DataAccess[Task, CompanyId](NaturalTransformation.refl, userByName)
-
     val saveAndGetUser: Task[Option[User]] =
       for {
+        // 1. Instantiate a stream with an EventStorage
+        eventStore <- MemoryEventStorage[CompanyId, Long, UserAccountEvent]
+
+        // 2. Create QueryAPIs defined for stream
+        // Just use some in-memory snapshot storage for this example
+        userByIdStorage <- MemorySingleSnapshotStorage[CompanyUserId, Long, User]
+        userByNameStorage <- MemorySingleSnapshotStorage[CompanyUsername, Long, User]
+        userById = userByIdQuery(eventStore, userByIdStorage) // QueryAPI[Task, KK, UserAccountEvent, CompanyUsername, Long, User]
+        userByName = userByNameQuery(eventStore, userByNameStorage) // QueryAPI[Task, KK, UserAccountEvent, CompanyUsername, Long, User]
+
+        // 3. Create SaveAPIs defined for stream. This is done when creating DataAccess which has saveUser with Operation logic
+        dataLayer = DataAccess[Task, CompanyId](NaturalTransformation.refl, userByName)
+
         _ <- dataLayer.saveUser(User(CompanyUserId("abccom", "a"), "Fred", "fred")) // Task[SaveResult[User]]
         saved <- userById.get(CompanyUserId("abccom", "a"), QueryConsistency.LatestEvent)
       } yield saved

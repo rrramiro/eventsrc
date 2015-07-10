@@ -69,7 +69,7 @@ case class QueryAPI[F[_], KK, E, K, S, V](
       snapshotStore.get(key, SequenceQuery.latest[S]),
       for {
         latestSnapshot <- generateLatestSnapshot(key)
-        _ = persistSnapshot(key, latestSnapshot.latest, latestSnapshot.previousPersisted.some)
+        _ <- persistSnapshot(key, latestSnapshot.latest, latestSnapshot.previousPersisted.some)
       } yield latestSnapshot.latest
     )
 
@@ -189,44 +189,41 @@ object SaveAPIConfig {
   val default = SaveAPIConfig(Retry.fullJitter(20, 5.millis, 2.0))
 }
 
-case class SaveAPI[F[_], KK, E, K, S, V](
+case class SaveAPI[F[_], KK, E, K, S](
     taskToF: Task ~> F,
-    query: QueryAPI[F, KK, E, K, S, V]
+    toStreamKey: K => KK,
+    eventStore: EventStorage[F, KK, S, E]
 ) {
   // TODO: Maybe just make a MonadTask trait and use it as a constraint.
-  private def saveWithRetry(key: K, operation: Operation[S, V, E], durations: Seq[Duration])(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S, V]] =
+  private def saveWithRetry(key: K, operation: Operation[S, E], durations: Seq[Duration])(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S]] =
     durations match {
       case d :: ds =>
         for {
           _ <- taskToF { Task.schedule((), d) }
-          old <- query.generateLatestSnapshot(key)
-          op = operation.run(old.latest)
+          latest <- eventStore.latest(toStreamKey(key)).run
+          seq = latest.map(_.id.seq)
+          op = operation.apply(seq)
           result <- op.fold(
             EventStreamError.noop.left[Event[KK, S, E]].point[F],
             EventStreamError.reject(_).left[Event[KK, S, E]].point[F],
-            e => query.eventStore.put(Event.next[KK, S, E](query.toStreamKey(key), old.latest.seq, e))
+            e => eventStore.put(Event.next[KK, S, E](toStreamKey(key), seq, e))
           )
           transform <- result match {
             case -\/(EventStreamError.DuplicateEvent) =>
               saveWithRetry(key, operation, ds)
             case -\/(EventStreamError.Noop) =>
-              SaveResult.noop[S, V](old.latest).point[F]
+              SaveResult.noop[S](seq).point[F]
             case -\/(EventStreamError.Rejected(r)) =>
-              SaveResult.reject[S, V](r).point[F]
+              SaveResult.reject[S](r).point[F]
             case \/-(event) =>
-              val newSnapshot = query.acc(key)(old.latest, event)
-
-              for {
-                saveResult <- SaveResult.success[S, V](newSnapshot).point[F]
-                _ <- query.persistSnapshot(key, newSnapshot, old.previousPersisted.some)
-              } yield saveResult
+              SaveResult.success[S](event.id.seq).point[F]
           }
         } yield transform
 
       case _ =>
-        SaveResult.reject[S, V](NonEmptyList(Reason("Failed to save after retries"))).point[F]
+        SaveResult.reject[S](NonEmptyList(Reason("Failed to save after retries"))).point[F]
     }
 
-  def save(key: K, operation: Operation[S, V, E])(config: SaveAPIConfig)(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S, V]] =
+  def save(key: K, operation: Operation[S, E])(config: SaveAPIConfig)(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S]] =
     saveWithRetry(key, operation, Seq(0.milli) ++ config.retry.run)
 }

@@ -11,13 +11,14 @@ import scodec.bits.ByteVector
 
 import scalaz._
 import scalaz.concurrent.Task
+import scalaz.syntax.applicative._
 
 class DynamoSingleStreamExampleSpec(val arguments: Arguments) extends SingleStreamExampleSpec with LocalDynamoDB with DynamoDBActionMatchers {
   override def is =
     s2"""
         Dynamo implementation of single event stream supports       ${step(startLocalDynamoDB)} ${step(createTestTable)}
-          Add and get                                               ${addAndGetClientById.set(minTestsOk = NUM_TESTS)}
-          Add and delete                                            ${addAndDelete.set(minTestsOk = NUM_TESTS)}
+          Add and get                                               ${addAndGetClientById(NUM_TESTS)}
+          Add and delete                                            ${addAndDelete(NUM_TESTS)}
 
                                                                     ${step(deleteTestTable)}
                                                                     ${step(stopLocalDynamoDB)}
@@ -40,10 +41,10 @@ class DynamoSingleStreamExampleSpec(val arguments: Arguments) extends SingleStre
   def deleteTestTable() =
     DynamoDBOps.deleteTable(ClientEventStreamDynamoMappings.schema)
 
-  override protected val eventStore = DynamoClientEventStream.eventStore(runner)
+  val getEventStore = DynamoClientEventStream.eventStore(runner).point[Task]
 
   import SingleStreamExample.Client
-  override protected def snapshotStore = MemorySingleSnapshotStorage[Task, Client.Id, TwoPartSequence[Long], Client.Data]
+  val getSnapshotStore = MemorySingleSnapshotStorage[Client.Id, TwoPartSequence[Long], Client.Data]
 
 }
 
@@ -75,5 +76,3 @@ object DynamoClientEventStream {
       ColumnTwoPartSequence.iso.to
     )
 }
-
-class ClientIdClientDataSnapshotStorage extends MemorySingleSnapshotStorage[Task, Client.Id, TwoPartSequence[Long], Client.Data]

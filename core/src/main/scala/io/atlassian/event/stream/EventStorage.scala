@@ -1,7 +1,7 @@
 package io.atlassian.event
 package stream
 
-import scalaz.{ \/, Functor }
+import scalaz.{ \/, Functor, OptionT }
 import scalaz.stream.Process
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.functor._
@@ -29,6 +29,14 @@ trait EventStorage[F[_], K, S, E] { self =>
    */
   def put(event: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]]
 
+  /**
+   * Get the latest event.
+   *
+   * @param key The key
+   * @return Single event if found.
+   */
+  def latest(key: K): OptionT[F, Event[K, S, E]]
+
   // Invariant bifunctor
   def mapKS[KK, SS](k: KK => K, kk: K => KK, s: SS => S, ss: S => SS)(implicit F: Functor[F]) =
     // TODO: Monocle would clean this up a bit.
@@ -41,5 +49,7 @@ trait EventStorage[F[_], K, S, E] { self =>
 
       def put(event: Event[KK, SS, E]) =
         self.put(event.updateId(_.bimap(k, s))).map(_.map(updateKey))
+
+      def latest(key: KK) = self.latest(k(key)).map(updateKey)
     }
 }
