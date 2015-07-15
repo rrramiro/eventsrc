@@ -93,6 +93,7 @@ trait EventSource[K, V, S] {
 
   object Event {
     def next(key: K, snapshot: Snapshot, op: Transform[V]): Event =
+      // TODO: SIDE EFFECT!!!
       Event(snapshot.id.map { EventId.next }.getOrElse { EventId.first(key) }, DateTime.now, op)
   }
 

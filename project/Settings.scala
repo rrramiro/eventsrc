@@ -87,6 +87,7 @@ object Settings {
           , Wart.Throw
           , Wart.Product
           , Wart.Serializable
+          , Wart.FinalCaseClass
         )
       , wartremoverExcluded ++= Seq()
     )

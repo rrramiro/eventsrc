@@ -18,7 +18,9 @@ object MemoryEventStorage {
 
     new EventStorage[Task, KK, S, E] {
       override def get(key: KK, fromOption: Option[S]): Process[Task, Event[KK, S, E]] = {
-        map.get(key) match {
+        Process.await(Task.delay {
+          map.get(key)
+        }) {
           case None => Process.halt
           case Some(cs) =>
             Process.emitAll(cs.reverse.dropWhile { ev => fromOption.fold(false) { from => ev.id.seq <= from } })
