@@ -1,6 +1,8 @@
 Eventsrc
 ======
 
+https://codeship.com/projects/91708/status?branch=master
+
 A library for implementing event sourcing data persistence in your Scala project.
 
 *Please note that this code is still in early but active development*
