@@ -117,7 +117,7 @@ object UserAccountExample {
           val operation = Operation[Long, UserAccountEvent] { _ =>
             Operation.Result.success(event)
           }
-          saveAPI.save(CompanyUsername(u.id.companyId, u.username), operation)(SaveAPIConfig.default)
+          saveAPI.save(SaveAPIConfig.default)(CompanyUsername(u.id.companyId, u.username), operation)
         }
       }
   }

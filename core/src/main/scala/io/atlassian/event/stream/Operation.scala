@@ -7,7 +7,7 @@ import scalaz.syntax.nel._
 /**
  * Wraps an operation to save an event to an event stream. Saving to an event stream is through an API, which is tied
  * to an aggregate type.
- * @param run Function from a sequence to an operation that should occur (i.e. should we save the event or reject it)
+ * @param apply Function from a sequence to an operation that should occur (i.e. should we save the event or reject it)
  */
 case class Operation[S, E](apply: Option[S] => Operation.Result[E])
 
