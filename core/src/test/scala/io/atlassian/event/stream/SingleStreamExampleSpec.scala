@@ -44,19 +44,19 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
   val addAndGetClientById = mkTest { (q, s) =>
     Prop.forAll { (k: Client.Id, c: Client.Data) =>
       (for {
-         _ <- s.save(k, ClientEvent.insert(k, c).op[TwoPartSequence[Long]])(SaveAPIConfig.default)
-         saved <- q.get(k, QueryConsistency.LatestEvent)
-       } yield saved) must returnValue(beSome(c))
+        _ <- s.save(k, ClientEvent.insert(k, c).op[TwoPartSequence[Long]])(SaveAPIConfig.default)
+        saved <- q.get(k, QueryConsistency.LatestEvent)
+      } yield saved) must returnValue(beSome(c))
     }
   }
 
   val addAndDelete = mkTest { (q, s) =>
     Prop.forAll { (k: Client.Id, c: Client.Data) =>
       (for {
-         _ <- s.save(k, ClientEvent.insert(k, c).op)(SaveAPIConfig.default)
-         _ <- s.save(k, ClientEvent.delete(k).op)(SaveAPIConfig.default)
-         saved <- q.get(k, QueryConsistency.LatestEvent)
-       } yield saved) must returnValue(beNone)
+        _ <- s.save(k, ClientEvent.insert(k, c).op)(SaveAPIConfig.default)
+        _ <- s.save(k, ClientEvent.delete(k).op)(SaveAPIConfig.default)
+        saved <- q.get(k, QueryConsistency.LatestEvent)
+      } yield saved) must returnValue(beNone)
     }
   }
 
@@ -76,15 +76,15 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
     Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
       val expected = (Some(d1), None, Some(d2), None)
       (for {
-         _ <- s.save(c1, Operation.insert(Insert(c1, d1)))(SaveAPIConfig.default)
-         v1 <- q.get(c1, QueryConsistency.LatestEvent)
-         _ <- s.save(c1, Operation.insert(Delete(c1)))(SaveAPIConfig.default)
-         v2 <- q.get(c1, QueryConsistency.LatestEvent)
-         _ <- s.save(c2, Operation.insert(Insert(c2, d2)))(SaveAPIConfig.default)
-         v3 <- q.get(c2, QueryConsistency.LatestEvent)
-         _ <- s.save(c2, Operation.insert(Delete(c2)))(SaveAPIConfig.default)
-         v4 <- q.get(c2, QueryConsistency.LatestEvent)
-       } yield (v1, v2, v3, v4)) must returnValue(expected)
+        _ <- s.save(c1, Operation.insert(Insert(c1, d1)))(SaveAPIConfig.default)
+        v1 <- q.get(c1, QueryConsistency.LatestEvent)
+        _ <- s.save(c1, Operation.insert(Delete(c1)))(SaveAPIConfig.default)
+        v2 <- q.get(c1, QueryConsistency.LatestEvent)
+        _ <- s.save(c2, Operation.insert(Insert(c2, d2)))(SaveAPIConfig.default)
+        v3 <- q.get(c2, QueryConsistency.LatestEvent)
+        _ <- s.save(c2, Operation.insert(Delete(c2)))(SaveAPIConfig.default)
+        v4 <- q.get(c2, QueryConsistency.LatestEvent)
+      } yield (v1, v2, v3, v4)) must returnValue(expected)
     }
   }
 }

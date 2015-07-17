@@ -14,8 +14,6 @@ object Dependencies {
     val junit         = "4.11"
     val log4j         = "2.0.1"
     val nscalaTime    = "2.0.0"
-    val healthCheck   = "1.1.0"
-    val dispatch      = "0.11.2"
   }
 
   lazy val scalaz =
@@ -50,16 +48,6 @@ object Dependencies {
     )
 
   lazy val common = scalaz ++ kadai ++ test
-
-  lazy val dispatch =
-    Seq(
-      "net.databinder.dispatch" %% "dispatch-core" % Version.dispatch
-    )
-
-  lazy val healthcheck = 
-    Seq(
-      "io.atlassian.health" %% "healthcheck-core"  % Version.healthCheck
-    )
 
   lazy val dynamodb =
     Seq(
