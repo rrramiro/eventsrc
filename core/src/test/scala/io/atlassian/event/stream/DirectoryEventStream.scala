@@ -33,7 +33,6 @@ object DirectoryEventStream {
 
   object ops {
     import scalaz.syntax.std.option._
-    import DataValidator._
     import Operation.syntax._
 
     def addUser(u: User): Operation[TwoPartSequence[Long], DirectoryEvent] =

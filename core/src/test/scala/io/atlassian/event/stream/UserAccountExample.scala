@@ -43,7 +43,8 @@ object UserAccountExample {
 
   def groupMembersByIdQuery(
     eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent],
-    snapshotStore: SnapshotStorage[Task, CompanyGroupId, Long, List[UserId]]) =
+    snapshotStore: SnapshotStorage[Task, CompanyGroupId, Long, List[UserId]]
+  ) =
     QueryAPI[Task, CompanyId, UserAccountEvent, CompanyGroupId, Long, List[UserId]](
       _.companyId,
       eventStore,
@@ -63,7 +64,8 @@ object UserAccountExample {
 
   def userByIdQuery(
     eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent],
-    snapshotStore: SnapshotStorage[Task, CompanyUserId, Long, User]) =
+    snapshotStore: SnapshotStorage[Task, CompanyUserId, Long, User]
+  ) =
     QueryAPI[Task, CompanyId, UserAccountEvent, CompanyUserId, Long, User](
       _.companyId,
       eventStore,
@@ -81,7 +83,8 @@ object UserAccountExample {
 
   def userByNameQuery(
     eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent],
-    snapshotStore: SnapshotStorage[Task, CompanyUsername, Long, User]) =
+    snapshotStore: SnapshotStorage[Task, CompanyUsername, Long, User]
+  ) =
     QueryAPI[Task, CompanyId, UserAccountEvent, CompanyUsername, Long, User](
       _.companyId,
       eventStore,
@@ -114,7 +117,7 @@ object UserAccountExample {
           val operation = Operation[Long, UserAccountEvent] { _ =>
             Operation.Result.success(event)
           }
-          saveAPI.save(CompanyUsername(u.id.companyId, u.username), operation)(SaveAPIConfig.default)
+          saveAPI.save(SaveAPIConfig.default)(CompanyUsername(u.id.companyId, u.username), operation)
         }
       }
   }
