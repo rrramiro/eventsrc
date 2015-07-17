@@ -46,20 +46,20 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
       val eventId = Column.compose2[EventId](tableDef.hash.column, tableDef.range.column) { case EventId(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
       val lastModified = Column[DateTime]("LastModifiedTimestamp").column
       val transform = Column.compose2[Transform[VV]](Column[Transform.Op]("Operation").column, tableDef.value.liftOption) {
-        case Transform.Delete => (Transform.Op.Delete, None)
+        case Transform.Delete    => (Transform.Op.Delete, None)
         case Transform.Insert(v) => (Transform.Op.Insert, Some(v))
       } {
         case (Transform.Op.Insert, Some(v)) => Transform.Insert(v)
-        case (Transform.Op.Delete, None) => Transform.delete
+        case (Transform.Op.Delete, None)    => Transform.delete
         case (Transform.Op.Delete, Some(v)) => Transform.delete // This shouldn't happen because the delete shouldn't have any data
-        case (Transform.Op.Insert, None) => ??? // shouldn't happen
+        case (Transform.Op.Insert, None)    => ??? // shouldn't happen
       }
 
       val event = Column.compose3[Event](eventId.liftOption, lastModified, transform) {
         case Event(id, ts, tx) => (None, ts, tx)
       } {
         case (Some(id), ts, tx) => Event(id, ts, tx)
-        case (None, _, _) => ??? // Shouldn't happen, it means there is no event Id in the row
+        case (None, _, _)       => ??? // Shouldn't happen, it means there is no event Id in the row
       }
     }
 
@@ -121,7 +121,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
         putResult <- ToF { interpret(table.putIfAbsent(event.id, event)) }
 
         r <- putResult match {
-          case Insert.New => event.right.point[F]
+          case Insert.New    => event.right.point[F]
           case Insert.Failed => Error.DuplicateEvent.left[Event].point[F]
         }
       } yield r

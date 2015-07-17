@@ -48,14 +48,14 @@ object DynamoSingleSnapshotStorage {
       val snapshotType = Column[SnapshotType]("type").column
 
       val value = Column.compose4[Snapshot[S, VV]](snapshotType, tableDef.value.liftOption, tableDef.range.column.liftOption, snapshotDateTime.liftOption) {
-        case Snapshot.NoSnapshot() => (NoSnapshot, None, None, None)
-        case Snapshot.Deleted(s, t) => (Deleted, None, s.some, t.some)
+        case Snapshot.NoSnapshot()   => (NoSnapshot, None, None, None)
+        case Snapshot.Deleted(s, t)  => (Deleted, None, s.some, t.some)
         case Snapshot.Value(v, s, t) => (Value, v.some, s.some, t.some)
       } {
-        case (NoSnapshot, _, _, _) => Snapshot.zero[S, VV]
-        case (Deleted, _, Some(s), Some(t)) => Snapshot.deleted(s, t)
+        case (NoSnapshot, _, _, _)              => Snapshot.zero[S, VV]
+        case (Deleted, _, Some(s), Some(t))     => Snapshot.deleted(s, t)
         case (Value, Some(v), Some(s), Some(t)) => Snapshot.value(v)(s, t)
-        case _ => ???
+        case _                                  => ???
       }
     }
 

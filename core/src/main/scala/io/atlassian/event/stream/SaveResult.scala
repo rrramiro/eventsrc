@@ -11,9 +11,9 @@ sealed trait SaveResult[S] {
 
   def fold[X](s: S => X, r: NonEmptyList[Reason] => X, n: Option[S] => X): X =
     this match {
-      case Success(v) => s(v)
+      case Success(v)      => s(v)
       case Reject(reasons) => r(reasons)
-      case Noop(v) => n(v)
+      case Noop(v)         => n(v)
     }
 }
 

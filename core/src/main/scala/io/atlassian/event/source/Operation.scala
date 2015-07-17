@@ -87,21 +87,21 @@ object Operation {
     def map[B](f: A => B): Result[B] =
       this match {
         case Success(t) => Success(t map f)
-        case Reject(r) => Reject(r)
-        case Noop() => Noop()
+        case Reject(r)  => Reject(r)
+        case Noop()     => Noop()
       }
 
     def orElse(other: => Result[A]): Result[A] =
       this match {
         case s @ Success(_) => s
-        case _ => other
+        case _              => other
       }
 
     def fold[T](noop: => T, reject: NonEmptyList[Reason] => T, success: Transform[A] => T): T =
       this match {
         case Success(t) => success(t)
-        case Reject(r) => reject(r)
-        case Noop() => noop
+        case Reject(r)  => reject(r)
+        case Noop()     => noop
       }
   }
 

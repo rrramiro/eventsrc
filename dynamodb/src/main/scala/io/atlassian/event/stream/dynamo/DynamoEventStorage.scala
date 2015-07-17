@@ -58,7 +58,7 @@ class DynamoEventStorage[F[_], KK, S, E](
       case Event(id, ts, tx) => (None, ts, tx)
     } {
       case (Some(id), ts, tx) => Event(id, ts, tx)
-      case (None, _, _) => ??? // Shouldn't happen, it means there is no event Id in the row
+      case (None, _, _)       => ??? // Shouldn't happen, it means there is no event Id in the row
     }
   }
 
@@ -103,7 +103,7 @@ class DynamoEventStorage[F[_], KK, S, E](
       putResult <- ToF { interpret(table.putIfAbsent(event.id, event)) }
 
       r <- putResult match {
-        case Insert.New => event.right.point[F]
+        case Insert.New    => event.right.point[F]
         case Insert.Failed => EventStreamError.DuplicateEvent.left[EV].point[F]
       }
     } yield r

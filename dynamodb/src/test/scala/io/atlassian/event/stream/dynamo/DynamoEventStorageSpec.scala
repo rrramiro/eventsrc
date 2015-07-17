@@ -36,13 +36,13 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
     implicit val transformOpEncoder: Encoder[Transform.Op] =
       Encoder[String].contramap(Transform.Op.apply)
     val transform = Column.compose2[E](Column[Transform.Op]("Operation").column, value.liftOption) {
-      case Transform.Delete => (Transform.Op.Delete, None)
+      case Transform.Delete    => (Transform.Op.Delete, None)
       case Transform.Insert(v) => (Transform.Op.Insert, Some(v))
     } {
       case (Transform.Op.Insert, Some(v)) => Transform.Insert(v)
-      case (Transform.Op.Delete, None) => Transform.delete
+      case (Transform.Op.Delete, None)    => Transform.delete
       case (Transform.Op.Delete, Some(v)) => Transform.delete // This shouldn't happen because the delete shouldn't have any data
-      case (Transform.Op.Insert, None) => ??? // shouldn't happen
+      case (Transform.Op.Insert, None)    => ??? // shouldn't happen
     }
 
     lazy val tableDefinition =
@@ -101,7 +101,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
       }
       DBEventStorage.get(key, None).runFoldMap { _ => 1 }.attemptRun match {
         case \/-(count) => count === 150
-        case _ => ko
+        case _          => ko
       }
 
     }
@@ -124,10 +124,10 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
       val last: Task[Option[String]] = DBEventStorage.get(key, None).runLast.map { _.flatMap { _.operation.value } }
       (r.attemptRun match {
         case \/-(eventCount) => eventCount === 3
-        case _ => ko
+        case _               => ko
       }) and (last.attemptRun match {
         case \/-(saved) => saved === Some(v3)
-        case _ => ko
+        case _          => ko
       })
     }
 
@@ -149,10 +149,10 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
       val last: Task[List[String]] = DBEventStorage.get(key, Some(0)).runFoldMap { x => List(x.operation.value) }.map { _.flatten }
       (r.attemptRun match {
         case \/-(eventCount) => eventCount === 2
-        case _ => ko
+        case _               => ko
       }) and (last.attemptRun match {
         case \/-(saved) => saved === List(v2, v3)
-        case _ => ko
+        case _          => ko
       })
     }
 
@@ -161,8 +161,10 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
       val eventId = EventId.first[KK, S](nonEmptyKey.unwrap)
       val event: DBEventStorage.EV = Event[KK, S, E](eventId, DateTime.now, Transform.insert(value))
       DBEventStorage.put(event).run
-      DynamoDB.get[DBEventStorage.EID, DBEventStorage.EV](eventId)(DynamoMappings.tableName,
-        DBEventStorage.Columns.eventId, DBEventStorage.Columns.event) must returnValue(event.some)
+      DynamoDB.get[DBEventStorage.EID, DBEventStorage.EV](eventId)(
+        DynamoMappings.tableName,
+        DBEventStorage.Columns.eventId, DBEventStorage.Columns.event
+      ) must returnValue(event.some)
     }
 
   def eventReturnsErrorForDuplicateEvent =
@@ -174,7 +176,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
         result <- DBEventStorage.put(event)
       } yield result).attemptRun match {
         case \/-(-\/(e)) => e === DuplicateEvent
-        case _ => ko
+        case _           => ko
       }
     }
 

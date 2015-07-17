@@ -46,7 +46,7 @@ object SingleStreamExample {
   implicit val ClientEventEncodeJson: EncodeJson[ClientEvent] =
     EncodeJson {
       case e @ Insert(_, _) => ("insert" := e) ->: jEmptyObject
-      case e @ Delete(_) => ("delete" := e) ->: jEmptyObject
+      case e @ Delete(_)    => ("delete" := e) ->: jEmptyObject
     }
 
   implicit val ClientEventDecodeJson: DecodeJson[ClientEvent] =

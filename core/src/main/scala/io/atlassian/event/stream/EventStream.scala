@@ -36,7 +36,7 @@ sealed trait QueryConsistency {
   def fold[X](snapshot: => X, event: => X): X =
     this match {
       case LatestSnapshot => snapshot
-      case LatestEvent => event
+      case LatestEvent    => event
     }
 }
 object QueryConsistency {

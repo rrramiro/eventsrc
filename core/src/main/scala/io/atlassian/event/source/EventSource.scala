@@ -112,9 +112,9 @@ trait EventSource[K, V, S] {
 
     def fold[X](none: => X, value: (V, EventId, DateTime) => X, deleted: (EventId, DateTime) => X): X =
       this match {
-        case NoSnapshot() => none
+        case NoSnapshot()       => none
         case Value(v, at, time) => value(v, at, time)
-        case Deleted(at, time) => deleted(at, time)
+        case Deleted(at, time)  => deleted(at, time)
       }
   }
 
@@ -149,7 +149,7 @@ trait EventSource[K, V, S] {
 
     def update(s: Snapshot, ev: Event): Snapshot =
       ev.operation.value match {
-        case None => Deleted(ev.id, ev.time)
+        case None    => Deleted(ev.id, ev.time)
         case Some(v) => Value(v, ev.id, ev.time)
       }
   }
@@ -252,10 +252,10 @@ trait EventSource[K, V, S] {
             EventSource.Result.reject[V](r).point[F]
           case \/-(event) =>
             ((old.value, event.operation) match {
-              case (None, Transform.Insert(e)) => Result.insert(e)
+              case (None, Transform.Insert(e))    => Result.insert(e)
               case (Some(o), Transform.Insert(n)) => Result.update(o, n)
-              case (Some(o), Transform.Delete) => Result.delete(o)
-              case (None, Transform.Delete) => Result.noop[V]() // shouldn't happen, only here for exhaustiveness
+              case (Some(o), Transform.Delete)    => Result.delete(o)
+              case (None, Transform.Delete)       => Result.noop[V]() // shouldn't happen, only here for exhaustiveness
             }).point[F]
         }
       } yield transform

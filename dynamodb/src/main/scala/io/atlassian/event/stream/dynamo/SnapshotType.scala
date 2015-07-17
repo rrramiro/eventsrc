@@ -18,15 +18,15 @@ private[dynamo] object SnapshotType {
   def apply(t: SnapshotType): String =
     t match {
       case NoSnapshot => "none"
-      case Value => "value"
-      case Deleted => "deleted"
+      case Value      => "value"
+      case Deleted    => "deleted"
     }
 
   def unapply(s: String): Option[SnapshotType] =
     s.toLowerCase match {
-      case "none" => NoSnapshot.some
-      case "value" => Value.some
+      case "none"    => NoSnapshot.some
+      case "value"   => Value.some
       case "deleted" => Deleted.some
-      case _ => none
+      case _         => none
     }
 }

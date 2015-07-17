@@ -11,9 +11,9 @@ sealed trait SequenceQuery[S] {
 
   def fold[X](before: S => X, earliest: => X, latest: => X): X =
     this match {
-      case Before(s) => before(s)
+      case Before(s)  => before(s)
       case Earliest() => earliest
-      case Latest() => latest
+      case Latest()   => latest
     }
 }
 

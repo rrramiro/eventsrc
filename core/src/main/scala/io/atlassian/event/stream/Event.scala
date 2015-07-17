@@ -26,7 +26,7 @@ object Event {
 
       def process[K, V](s: Snapshot[S, V])(f: Option[V] => PartialFunction[E, Option[V]]): Snapshot[S, V] =
         f(s.value).applyOrElse(e.operation, { (_: E) => s.value }) match {
-          case None => Snapshot.deleted.tupled(e.at)
+          case None    => Snapshot.deleted.tupled(e.at)
           case Some(v) => Snapshot.value(v).tupled(e.at)
         }
     }

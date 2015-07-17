@@ -37,8 +37,8 @@ object Operation {
     def fold[T](noop: => T, reject: NonEmptyList[Reason] => T, success: E => T): T =
       this match {
         case Success(t) => success(t)
-        case Reject(r) => reject(r)
-        case Noop() => noop
+        case Reject(r)  => reject(r)
+        case Noop()     => noop
       }
   }
 

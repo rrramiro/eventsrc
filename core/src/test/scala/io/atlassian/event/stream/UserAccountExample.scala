@@ -97,7 +97,7 @@ object UserAccountExample {
             case DeleteUser(id) =>
               ov match {
                 case Some(u) => if (u.id.userId == id) none[User] else u.some
-                case None => none[User]
+                case None    => none[User]
               }
           }
         }
