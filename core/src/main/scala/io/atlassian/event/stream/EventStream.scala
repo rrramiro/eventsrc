@@ -224,6 +224,6 @@ case class SaveAPI[F[_], KK, E, K, S](
         SaveResult.reject[S](NonEmptyList(Reason("Failed to save after retries"))).point[F]
     }
 
-  def save(key: K, operation: Operation[S, E])(config: SaveAPIConfig)(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S]] =
+  def save(config: SaveAPIConfig)(key: K, operation: Operation[S, E])(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S]] =
     saveWithRetry(key, operation, Seq(0.milli) ++ config.retry.run)
 }
