@@ -76,6 +76,7 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
     Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
       val expected = (Some(d1), None, Some(d2), None)
       (for {
+        _ <- s.save(SaveAPIConfig.default)(c1, Operation.insert(Insert(c1, d1)))
         v1 <- q.get(c1, QueryConsistency.LatestEvent)
         _ <- s.save(SaveAPIConfig.default)(c1, Operation.insert(Delete(c1)))
         v2 <- q.get(c1, QueryConsistency.LatestEvent)
