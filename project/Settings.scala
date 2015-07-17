@@ -28,7 +28,8 @@ object Settings {
     Defaults.coreDefaultSettings ++ 
     releaseSettings ++ // sbt-release
     wartRemoval ++
-    defaultScalariformSettings ++
+    scalariformSettings ++
+    scalariformPrefs ++
     net.virtualvoid.sbt.graph.Plugin.graphSettings ++ // dependency plugin settings 
     Seq[Def.Setting[_]] (
       organization := "io.atlassian"
@@ -56,6 +57,23 @@ object Settings {
     , addCompilerPlugin("org.scalamacros"        % "paradise"       % "2.0.1" cross CrossVersion.full)
     )
 
+  lazy val scalariformPrefs = {
+    import scalariform.formatter.preferences._
+         
+    Seq[Def.Setting[_]](
+      ScalariformKeys.preferences := ScalariformKeys.preferences.value
+        .setPreference(AlignArguments,                    false) // scalariform 0.1.4
+        .setPreference(AlignParameters,                   false)
+        .setPreference(AlignSingleLineCaseStatements,     true)
+        .setPreference(CompactControlReadability,         true)  
+        .setPreference(CompactStringConcatenation,        true)  
+        .setPreference(DoubleIndentClassDeclaration,      true)
+        .setPreference(PreserveSpaceBeforeArguments,      true)
+        .setPreference(RewriteArrowSymbols,               false)
+        .setPreference(SpaceInsideParentheses,            false)
+        .setPreference(SpacesAroundMultiImports,          true) // scalariform 0.1.4
+        )
+  }
 
   lazy val wartRemoval =
     wartremoverSettings ++ Seq(
