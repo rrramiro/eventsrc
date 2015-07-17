@@ -33,8 +33,8 @@ object Settings {
     Seq[Def.Setting[_]] (
       organization := "io.atlassian"
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom
-    , scalaVersion := "2.11.6"
-    , crossScalaVersions  := Seq("2.11.6", "2.10.5")
+    , scalaVersion := "2.11.7"
+    , crossScalaVersions  := Seq("2.11.7", "2.10.5")
     , ReleaseKeys.crossBuild := true
     , autoScalaLibrary := false
     , scalacOptions ++= scalacFlags 
@@ -42,11 +42,12 @@ object Settings {
     , resolvers ++= Seq(
         Resolver.defaultLocal
       , Resolver.mavenLocal
-      , "atlassian-public"   at "https://maven.atlassian.com/content/groups/atlassian-public/"
+      , "atlassian-public"   at "https://maven.atlassian.com/content/groups/public/"
       , Resolver.sonatypeRepo("public")
       , Resolver.sonatypeRepo("releases")
       , Resolver.sonatypeRepo("snapshots")
       , Resolver.bintrayRepo("non", "maven")
+      , Resolver.bintrayRepo("scalaz", "releases")
       )
     , mappings in (Compile, packageBin) ++= Seq(
         file("LICENSE") -> "META-INF/LICENSE"

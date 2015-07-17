@@ -79,7 +79,8 @@ object SingleStreamExample {
 
   def clientEventStream[K](
     eventStore: EventStorage[Task, SingleStreamKey, K, ClientEvent],
-    snapshotStore: SnapshotStorage[Task, Client.Id, K, Client.Data]) =
+    snapshotStore: SnapshotStorage[Task, Client.Id, K, Client.Data]
+  ) =
     QueryAPI[Task, SingleStreamKey, ClientEvent, Client.Id, K, Client.Data](
       _ => SingleStreamKey.VAL,
       eventStore,
