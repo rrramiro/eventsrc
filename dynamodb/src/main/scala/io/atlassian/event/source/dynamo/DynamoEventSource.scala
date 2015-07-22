@@ -2,14 +2,12 @@ package io.atlassian.event
 package source
 package dynamo
 
-import com.amazonaws.services.dynamodbv2.{ AmazonDynamoDB => DynamoClient }
 import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
 
 import io.atlassian.aws.dynamodb._
 import org.joda.time.DateTime
 import scalaz.{ Catchable, Monad, \/, ~> }
-import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.syntax.either._
 
@@ -33,8 +31,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
       DKK: Decoder[KK],
       ES: Encoder[S],
       DS: Decoder[S],
-      runAction: DynamoDBAction ~> Task,
-      ToF: Task ~> F
+      runAction: DynamoDBAction ~> F
   ) extends Storage[F] {
 
     object Columns {
@@ -63,7 +60,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
       }
     }
 
-    val interpret: table.DBAction ~> Task =
+    val interpret: table.DBAction ~> F =
       runAction compose
         table.transform(DynamoDB.interpreter(table)(
           TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)
@@ -82,16 +79,13 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
 
       import Process._
 
-      def requestPage(q: table.Query): Task[Page[table.R, Event]] = {
-        Task.suspend {
-          interpret(table.query(q))
-        }
-      }
+      def requestPage(q: table.Query): F[Page[table.R, Event]] =
+        interpret(table.query(q))
 
-      def loop(pt: Task[Page[table.R, Event]]): Process[Task, Event] =
+      def loop(pt: F[Page[table.R, Event]]): Process[F, Event] =
         await(pt) { page =>
           emitAll(page.result) ++ {
-            page.next.fold(halt: Process[Task, Event]) { seq =>
+            page.next.fold(halt: Process[F, Event]) { seq =>
               loop(requestPage(table.Query.range(key, seq, Comparison.Gt)))
             }
           }
@@ -105,7 +99,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
             seq => table.Query.range(key, seq, Comparison.Gte, table.Query.Config(consistency = config.queryConsistency))
           }
         }
-      }.translate(ToF)
+      }
     }
 
     /**
@@ -118,8 +112,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
      */
     override def put(event: Event): F[Error \/ Event] =
       for {
-        putResult <- ToF { interpret(table.putIfAbsent(event.id, event)) }
-
+        putResult <- interpret(table.putIfAbsent(event.id, event))
         r <- putResult match {
           case Insert.New    => event.right.point[F]
           case Insert.Failed => Error.DuplicateEvent.left[Event].point[F]

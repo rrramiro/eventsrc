@@ -2,13 +2,11 @@ package io.atlassian.event
 package stream
 package dynamo
 
-import io.atlassian.aws.WrappedInvalidException
 import io.atlassian.aws.dynamodb._
 import org.joda.time.DateTime
 import org.scalacheck.Prop
 import org.specs2.main.Arguments
 
-import scalaz._
 import scalaz.concurrent.Task
 
 class DynamoSingleSnapshotStorageSpec(val arguments: Arguments) extends ScalaCheckSpec with LocalDynamoDB with DynamoDBActionMatchers {
@@ -44,11 +42,7 @@ class DynamoSingleSnapshotStorageSpec(val arguments: Arguments) extends ScalaChe
 
   }
 
-  val runner: DynamoDBAction ~> Task =
-    new (DynamoDBAction ~> Task) {
-      def apply[A](a: DynamoDBAction[A]): Task[A] =
-        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
-    }
+  val runner = TaskTransformation.runner(DYNAMO_CLIENT)
 
   val DBDefinition = DynamoSingleSnapshotStorage.fromDefinition[Task, KK, S, V](DynamoMappings.tableDefinition, runner)
   val DBSnapshotStorage = DBDefinition.snapshotStore

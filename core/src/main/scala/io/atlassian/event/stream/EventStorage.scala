@@ -41,7 +41,7 @@ trait EventStorage[F[_], K, S, E] { self =>
   def mapKS[KK, SS](k: KK => K, kk: K => KK, s: SS => S, ss: S => SS)(implicit F: Functor[F]) =
     // TODO: Monocle would clean this up a bit.
     new EventStorage[F, KK, SS, E] {
-      def updateKey[E](event: Event[K, S, E]) =
+      def updateKey(event: Event[K, S, E]) =
         event.updateId(_.bimap(kk, ss))
 
       def get(key: KK, fromSeq: Option[SS]) =
