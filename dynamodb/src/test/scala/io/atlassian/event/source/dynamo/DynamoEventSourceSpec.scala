@@ -2,7 +2,6 @@ package io.atlassian.event
 package source
 package dynamo
 
-import io.atlassian.aws.WrappedInvalidException
 import org.junit.runner.RunWith
 import org.specs2.main.Arguments
 import io.atlassian.aws.dynamodb._
@@ -39,11 +38,7 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
   import DBEventSource._
   import Operation.syntax._
 
-  implicit lazy val runner: DynamoDBAction ~> Task =
-    new (DynamoDBAction ~> Task) {
-      def apply[A](a: DynamoDBAction[A]): Task[A] =
-        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
-    }
+  implicit lazy val runner = TaskTransformation.runner(DYNAMO_CLIENT)
 
   implicit val JodaDateTimeEqual: Equal[DateTime] =
     Equal.equalBy { _.withZone(DateTimeZone.UTC).toInstant.getMillis }

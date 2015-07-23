@@ -3,7 +3,6 @@ package stream
 package dynamo
 
 import argonaut._, Argonaut._
-import io.atlassian.aws.WrappedInvalidException
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.stream.memory.MemorySingleSnapshotStorage
 import org.specs2.main.Arguments
@@ -29,11 +28,7 @@ class DynamoDBDirectoryEventStreamSpec(val arguments: Arguments) extends Directo
     if (IS_LOCAL) 100
     else 10
 
-  val runner: DynamoDBAction ~> Task =
-    new (DynamoDBAction ~> Task) {
-      def apply[A](a: DynamoDBAction[A]): Task[A] =
-        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
-    }
+  val runner = TaskTransformation.runner(DYNAMO_CLIENT)
 
   def createTestTable() =
     DynamoDBOps.createTable(DirectoryEventStreamDynamoMappings.schema)
@@ -76,8 +71,7 @@ object DynamoDirectoryEventStream {
   def eventStore(runner: DynamoDBAction ~> Task) =
     new DynamoEventStorage[Task, ColumnDirectoryId, ColumnTwoPartSequence, DirectoryEvent](
       schema,
-      runner,
-      NaturalTransformation.refl
+      runner
     ).mapKS(
       ColumnDirectoryId.iso.from,
       ColumnDirectoryId.iso.to,

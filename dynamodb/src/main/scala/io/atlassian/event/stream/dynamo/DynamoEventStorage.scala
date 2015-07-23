@@ -6,7 +6,6 @@ import io.atlassian.event.stream.{ Event, EventId, EventStorage, EventStreamErro
 import org.joda.time.DateTime
 
 import scalaz._
-import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
@@ -24,8 +23,7 @@ import scalaz.syntax.monad._
  */
 class DynamoEventStorage[F[_], KK, S, E](
     tableDef: TableDefinition[KK, E, KK, S],
-    runAction: DynamoDBAction ~> Task,
-    ToF: Task ~> F
+    runAction: DynamoDBAction ~> F
 )(
     implicit
     M: Monad[F],
@@ -62,7 +60,7 @@ class DynamoEventStorage[F[_], KK, S, E](
     }
   }
 
-  private val interpret: table.DBAction ~> Task =
+  private val interpret: table.DBAction ~> F =
     runAction compose
       table.transform(DynamoDB.interpreter(table)(schema))
 
@@ -72,16 +70,13 @@ class DynamoEventStorage[F[_], KK, S, E](
   override def get(key: KK, fromSeq: Option[S]): Process[F, Event[KK, S, E]] = {
     import Process._
 
-    def requestPage(q: table.Query): Task[Page[table.R, EV]] = {
-      Task.suspend {
-        interpret(table.query(q))
-      }
-    }
+    def requestPage(q: table.Query): F[Page[table.R, EV]] =
+      interpret(table.query(q))
 
-    def loop(pt: Task[Page[table.R, EV]]): Process[Task, EV] =
+    def loop(pt: F[Page[table.R, EV]]): Process[F, EV] =
       await(pt) { page =>
         emitAll(page.result) ++ {
-          page.next.fold(halt: Process[Task, EV]) { seq =>
+          page.next.fold(halt: Process[F, EV]) { seq =>
             loop(requestPage(table.Query.range(key, seq, Comparison.Gt)))
           }
         }
@@ -95,12 +90,12 @@ class DynamoEventStorage[F[_], KK, S, E](
           seq => table.Query.range(key, seq, Comparison.Gt)
         }
       }
-    }.translate(ToF)
+    }
   }
 
   override def put(event: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
     for {
-      putResult <- ToF { interpret(table.putIfAbsent(event.id, event)) }
+      putResult <- interpret(table.putIfAbsent(event.id, event))
 
       r <- putResult match {
         case Insert.New    => event.right.point[F]
@@ -110,7 +105,7 @@ class DynamoEventStorage[F[_], KK, S, E](
 
   def latest(key: KK): OptionT[F, Event[KK, S, E]] = {
     def runQuery[A](q: table.Query, f: Page[S, EV] => Option[A]) =
-      OptionT(ToF(interpret(table.query(q)).map(f)))
+      OptionT(interpret(table.query(q).map(f)))
 
     val config = table.Query.Config(direction = ScanDirection.Descending, limit = Some(1))
     val hashQuery = table.Query.hash(key, config)

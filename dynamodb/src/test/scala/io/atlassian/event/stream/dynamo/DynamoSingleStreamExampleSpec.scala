@@ -5,9 +5,7 @@ package dynamo
 import io.atlassian.aws.WrappedInvalidException
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.stream.memory.MemorySingleSnapshotStorage
-import kadai.Attempt
 import org.specs2.main.Arguments
-import scodec.bits.ByteVector
 
 import scalaz._
 import scalaz.concurrent.Task
@@ -29,11 +27,7 @@ class DynamoSingleStreamExampleSpec(val arguments: Arguments) extends SingleStre
     if (IS_LOCAL) 100
     else 10
 
-  lazy val runner: DynamoDBAction ~> Task =
-    new (DynamoDBAction ~> Task) {
-      def apply[A](a: DynamoDBAction[A]): Task[A] =
-        a.run(DYNAMO_CLIENT).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
-    }
+  lazy val runner = TaskTransformation.runner(DYNAMO_CLIENT)
 
   def createTestTable() =
     DynamoDBOps.createTable(ClientEventStreamDynamoMappings.schema)
@@ -67,8 +61,7 @@ object DynamoClientEventStream {
   def eventStore(runner: DynamoDBAction ~> Task) =
     new DynamoEventStorage(
       schema,
-      runner,
-      NaturalTransformation.refl
+      runner
     ).mapKS(
       ColumnSingleStreamKey.iso.from,
       ColumnSingleStreamKey.iso.to,
