@@ -4,11 +4,11 @@ import Keys._
 object Dependencies {
 
   object Version {
-    val scalaz        = "7.1.2"
+    val scalaz        = "7.1.3"
     val scalazStream  = "0.7.1a"
     val argonaut      = "6.1"
-    val awsScala      = "3.0.2"
-    val kadai         = "3.3.0"
+    val awsScala      = "3.0.3"
+    val kadai         = "3.3.4"
     val specs2        = "3.6"
     val scalacheck    = "1.12.2"
     val junit         = "4.11"
