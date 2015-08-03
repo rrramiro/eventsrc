@@ -60,11 +60,13 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
       }
     }
 
-    val interpret: table.DBAction ~> F =
+    val interpret: table.DBAction ~> F = {
+      import DynamoDBAction._
       runAction compose
         table.transform(DynamoDB.interpreter(table)(
           TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)
         ))
+    }
 
     import scalaz.syntax.monad._
 

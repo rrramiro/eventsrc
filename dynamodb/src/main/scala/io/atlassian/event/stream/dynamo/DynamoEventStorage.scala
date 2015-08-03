@@ -60,9 +60,11 @@ class DynamoEventStorage[F[_], KK, S, E](
     }
   }
 
-  private val interpret: table.DBAction ~> F =
+  private val interpret: table.DBAction ~> F = {
+    import DynamoDBAction._
     runAction compose
       table.transform(DynamoDB.interpreter(table)(schema))
+  }
 
   lazy val schema =
     TableDefinition.from[EID, EV, KK, S](tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)

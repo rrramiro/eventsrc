@@ -8,10 +8,12 @@ import scalaz.~>
 import scalaz.concurrent.Task
 
 object TaskTransformation {
+  import DynamoDBAction._
+
   def runner(client: AmazonDynamoDB): DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
-        a.run(client).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
+        a.runAction(client).fold({ i => Task.fail(WrappedInvalidException.orUnderlying(i)) }, { a => Task.now(a) })
 
     }
 }

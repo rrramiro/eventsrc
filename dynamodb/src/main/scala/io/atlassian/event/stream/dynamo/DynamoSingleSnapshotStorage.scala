@@ -70,9 +70,11 @@ object DynamoSingleSnapshotStorage {
         type R = String
       }
 
-      private val interpret: table.DBAction ~> F =
+      private val interpret: table.DBAction ~> F = {
+        import DynamoDBAction._
         runAction compose
           table.transform(DynamoDB.interpreter(table)(tableDefinition))
+      }
 
       override def get(key: KK, sequence: SequenceQuery[S]): F[Snapshot[S, VV]] =
         sequence.fold(

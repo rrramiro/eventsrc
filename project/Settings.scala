@@ -44,6 +44,7 @@ object Settings {
         Resolver.defaultLocal
       , Resolver.mavenLocal
       , "atlassian-public"   at "https://maven.atlassian.com/content/groups/public/"
+      , "atlassian-central-staging" at "https://maven.atlassian.com/central-staging/"
       , Resolver.sonatypeRepo("public")
       , Resolver.sonatypeRepo("releases")
       , Resolver.sonatypeRepo("snapshots")
