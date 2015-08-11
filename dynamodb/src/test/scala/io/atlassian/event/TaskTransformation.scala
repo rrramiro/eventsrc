@@ -9,7 +9,6 @@ import scalaz.~>
 import scalaz.concurrent.Task
 
 object TaskTransformation {
-
   def runner(client: AmazonDynamoDB): DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
