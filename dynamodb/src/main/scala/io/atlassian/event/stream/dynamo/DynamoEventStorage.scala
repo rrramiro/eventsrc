@@ -9,6 +9,7 @@ import scalaz._
 import scalaz.stream.Process
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
+import DynamoDBAction._
 
 /**
  * Implementation of EventStorage using DynamoDB via the aws-scala library. To use it:

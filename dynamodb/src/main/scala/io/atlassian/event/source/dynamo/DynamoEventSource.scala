@@ -10,6 +10,7 @@ import org.joda.time.DateTime
 import scalaz.{ Catchable, Monad, \/, ~> }
 import scalaz.stream.Process
 import scalaz.syntax.either._
+import DynamoDBAction._
 
 trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
   import EventSource.Error

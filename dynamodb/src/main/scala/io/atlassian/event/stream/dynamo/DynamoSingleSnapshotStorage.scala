@@ -10,6 +10,7 @@ import scalaz.syntax.either._
 import scalaz.syntax.std.option._
 import scalaz.std.option._
 import scalaz.syntax.monad._
+import DynamoDBAction._
 
 case class WrappedKey[KK](key: KK, dummy: String)
 
