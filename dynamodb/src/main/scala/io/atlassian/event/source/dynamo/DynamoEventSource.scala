@@ -10,6 +10,7 @@ import org.joda.time.DateTime
 import scalaz.{ Catchable, Monad, \/, ~> }
 import scalaz.stream.Process
 import scalaz.syntax.either._
+import DynamoDBAction._
 
 trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
   import EventSource.Error
@@ -60,13 +61,11 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
       }
     }
 
-    val interpret: table.DBAction ~> F = {
-      import DynamoDBAction._
+    val interpret: table.DBAction ~> F =
       runAction compose
         table.transform(DynamoDB.interpreter(table)(
           TableDefinition.from(tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)
         ))
-    }
 
     import scalaz.syntax.monad._
 

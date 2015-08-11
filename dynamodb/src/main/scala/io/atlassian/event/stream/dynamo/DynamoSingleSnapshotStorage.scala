@@ -10,6 +10,7 @@ import scalaz.syntax.either._
 import scalaz.syntax.std.option._
 import scalaz.std.option._
 import scalaz.syntax.monad._
+import DynamoDBAction._
 
 case class WrappedKey[KK](key: KK, dummy: String)
 
@@ -70,11 +71,9 @@ object DynamoSingleSnapshotStorage {
         type R = String
       }
 
-      private val interpret: table.DBAction ~> F = {
-        import DynamoDBAction._
+      private val interpret: table.DBAction ~> F =
         runAction compose
           table.transform(DynamoDB.interpreter(table)(tableDefinition))
-      }
 
       override def get(key: KK, sequence: SequenceQuery[S]): F[Snapshot[S, VV]] =
         sequence.fold(

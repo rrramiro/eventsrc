@@ -5,11 +5,11 @@ object Dependencies {
 
   object Version {
     val scalaz        = "7.1.3"
-    val scalazStream  = "0.7.2a"
+    val scalazStream  = "0.7.1a"
     val argonaut      = "6.1"
     val awsScala      = "4.0.0"
     val kadai         = "3.3.4"
-    val specs2        = "3.6.2"
+    val specs2        = "3.6"
     val scalacheck    = "1.12.2"
     val junit         = "4.11"
     val log4j         = "2.0.1"
