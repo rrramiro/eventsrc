@@ -29,7 +29,7 @@ Currently the artifacts are published to Atlassian's public Maven repository, so
     
     resolvers += "atlassian-public"   at "https://maven.atlassian.com/content/groups/atlassian-public/"
 
-The project is split into separate modules for each type of AWS API so you can import them separately if you wish (e.g. `aws-scala-s3`, `aws-scala-dynamodb`, `aws-scala-sqs`, `aws-scala-cloudformation`).
+The project is split into separate modules for each type of AWS API so you can import them separately if you wish (e.g. `eventsrc-dynamodb`, `eventsrc-core`).
 Alternatively, you can:
 
     libraryDependencies += "io.atlassian" %% "eventsrc"  % "0.0.16"
