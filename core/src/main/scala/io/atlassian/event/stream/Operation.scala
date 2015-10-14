@@ -1,8 +1,9 @@
 package io.atlassian.event
 package stream
 
-import scalaz.NonEmptyList
-import scalaz.syntax.nel._
+import scalaz.{ Equal, NonEmptyList }
+import scalaz.syntax.all._
+import scalaz.std.option._
 
 /**
  * Wraps an operation to save an event to an event stream. Saving to an event stream is through an API, which is tied
@@ -15,9 +16,9 @@ object Operation {
   def insert[S, E](e: E): Operation[S, E] =
     Operation { _ => Result.success(e) }
 
-  def ifSeq[S, E](seq: S, e: E): Operation[S, E] =
+  def ifSeq[S: Equal, E](seq: S, e: E): Operation[S, E] =
     Operation { oseq =>
-      if (oseq == seq) Result.success(e)
+      if (oseq === Some(seq)) Result.success(e)
       else Result.reject(Reason(s"Mismatched event stream sequence number: $oseq does not match expected $seq").wrapNel)
     }
 
