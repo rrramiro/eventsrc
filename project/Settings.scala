@@ -22,6 +22,7 @@ object Settings {
   , "-Ywarn-dead-code" // N.B. doesn't work well with the ??? hole
   , "-Ywarn-numeric-widen"
   , "-Ywarn-value-discard"     
+  , "-Xmax-classfile-name", "134"
   )
 
   lazy val standardSettings = 
