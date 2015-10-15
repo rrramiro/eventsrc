@@ -16,8 +16,6 @@ import scalaz.syntax.std.option._
  */
 sealed trait EventStreamError
 object EventStreamError {
-  def noop: EventStreamError = Noop
-
   def reject(s: NonEmptyList[Reason]): EventStreamError = Rejected(s)
 
   val duplicate: EventStreamError = DuplicateEvent
@@ -25,9 +23,6 @@ object EventStreamError {
   case object DuplicateEvent extends EventStreamError
 
   case class Rejected(s: NonEmptyList[Reason]) extends EventStreamError
-
-  // if the client rejects an update operation
-  case object Noop extends EventStreamError
 }
 
 sealed trait QueryConsistency {
@@ -204,15 +199,12 @@ case class SaveAPI[F[_], KK, E, K, S](
           seq = latest.map(_.id.seq)
           op = operation.apply(seq)
           result <- op.fold(
-            EventStreamError.noop.left[Event[KK, S, E]].point[F],
             EventStreamError.reject(_).left[Event[KK, S, E]].point[F],
             e => eventStore.put(Event.next[KK, S, E](toStreamKey(key), seq, e))
           )
           transform <- result match {
             case -\/(EventStreamError.DuplicateEvent) =>
               saveWithRetry(key, operation, ds)
-            case -\/(EventStreamError.Noop) =>
-              SaveResult.noop[S](seq).point[F]
             case -\/(EventStreamError.Rejected(r)) =>
               SaveResult.reject[S](r).point[F]
             case \/-(event) =>

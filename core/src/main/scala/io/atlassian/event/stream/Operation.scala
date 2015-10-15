@@ -33,28 +33,23 @@ object Operation {
     import Result._
 
     def orElse(other: => Result[E]): Result[E] =
-      fold(other, _ => other, _ => this)
+      fold(_ => other, _ => this)
 
-    def fold[T](noop: => T, reject: NonEmptyList[Reason] => T, success: E => T): T =
+    def fold[T](reject: NonEmptyList[Reason] => T, success: E => T): T =
       this match {
         case Success(t) => success(t)
         case Reject(r)  => reject(r)
-        case Noop()     => noop
       }
   }
 
   object Result {
     case class Success[E](event: E) extends Result[E]
     case class Reject[E](reasons: NonEmptyList[Reason]) extends Result[E]
-    case class Noop[E]() extends Result[E]
 
     def success[E](e: E): Result[E] =
       Success(e)
 
     def reject[E](r: NonEmptyList[Reason]): Result[E] =
       Reject(r)
-
-    def noop[E]: Result[E] =
-      Noop()
   }
 }
