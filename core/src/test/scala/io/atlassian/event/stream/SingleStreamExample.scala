@@ -99,7 +99,8 @@ object SingleStreamExample {
     SaveAPI(
       NaturalTransformation.refl,
       query.toStreamKey,
-      query.eventStore
+      query.eventStore,
+      DefaultExecutor
     )
 
 }

@@ -3,27 +3,10 @@ package stream
 
 import org.joda.time.DateTime
 
-import scala.concurrent.duration._
 import scalaz._
-import scalaz.concurrent.Task
 import scalaz.stream.{ process1, Process }
 import scalaz.syntax.all._
 import scalaz.syntax.std.option._
-
-/**
- * EventStreamError represents any error conditions that are useful to represent for event sources. In particular,
- * we need to know about attempts to store duplicate events.
- */
-sealed trait EventStreamError
-object EventStreamError {
-  def reject(s: NonEmptyList[Reason]): EventStreamError = Rejected(s)
-
-  val duplicate: EventStreamError = DuplicateEvent
-
-  case object DuplicateEvent extends EventStreamError
-
-  case class Rejected(s: NonEmptyList[Reason]) extends EventStreamError
-}
 
 sealed trait QueryConsistency {
   import QueryConsistency._
@@ -178,44 +161,3 @@ case class QueryAPI[F[_], KK, E, K, S, V](
       snapshot.right[SnapshotStorage.Error].point[F]
 }
 
-case class SaveAPIConfig(retry: Retry)
-
-object SaveAPIConfig {
-  val default = SaveAPIConfig(Retry.fullJitter(20, 5.millis, 2.0))
-}
-
-case class SaveAPI[F[_], KK, E, K, S](
-    taskToF: Task ~> F,
-    toStreamKey: K => KK,
-    eventStore: EventStorage[F, KK, S, E]
-) {
-  // TODO: Maybe just make a MonadTask trait and use it as a constraint.
-  private def saveWithRetry(key: K, operation: Operation[S, E], durations: Seq[Duration])(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S]] =
-    durations match {
-      case d :: ds =>
-        for {
-          _ <- taskToF { Task.schedule((), d) }
-          latest <- eventStore.latest(toStreamKey(key)).run
-          seq = latest.map(_.id.seq)
-          op = operation.apply(seq)
-          result <- op.fold(
-            EventStreamError.reject(_).left[Event[KK, S, E]].point[F],
-            e => eventStore.put(Event.next[KK, S, E](toStreamKey(key), seq, e))
-          )
-          transform <- result match {
-            case -\/(EventStreamError.DuplicateEvent) =>
-              saveWithRetry(key, operation, ds)
-            case -\/(EventStreamError.Rejected(r)) =>
-              SaveResult.reject[S](r).point[F]
-            case \/-(event) =>
-              SaveResult.success[S](event.id.seq).point[F]
-          }
-        } yield transform
-
-      case _ =>
-        SaveResult.reject[S](NonEmptyList(Reason("Failed to save after retries"))).point[F]
-    }
-
-  def save(config: SaveAPIConfig)(key: K, operation: Operation[S, E])(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): F[SaveResult[S]] =
-    saveWithRetry(key, operation, Seq(0.milli) ++ config.retry.run)
-}
