@@ -16,7 +16,7 @@ object Retry {
     if (retryLimit <= 0 || base <= 0.millis || backoffFactor < 0)
       throw new IllegalArgumentException(s"Parameters cannot be negative")
     else
-      Task {
+      Task.delay {
         (1 to retryLimit).map { i =>
           base * Math.pow(i.toDouble - 1, backoffFactor) * scala.util.Random.nextDouble()
         }
