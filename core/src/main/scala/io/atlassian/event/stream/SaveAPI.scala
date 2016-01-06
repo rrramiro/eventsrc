@@ -4,7 +4,7 @@ package stream
 import java.util.concurrent.ScheduledExecutorService
 
 import scala.concurrent.duration._
-import scalaz.{ Catchable, Monad, NonEmptyList, ~>, \/-, -\/ }
+import scalaz.{ Monad, NonEmptyList, ~>, \/-, -\/ }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
 import scalaz.concurrent.Task
@@ -30,15 +30,13 @@ case class SaveAPI[F[_], KK, E, K, S](
       case d :: ds =>
         for {
           _ <- taskToF {
-            if (d.toMicros == 0)
+            if (d.toMillis == 0)
               Task.now(())
             else
               Task.schedule((), d)(executor)
           }
-          latest <- eventStore.latest(toStreamKey(key)).run
-          seq = latest.map(_.id.seq)
-          op = operation.apply(seq)
-          result <- op.fold(
+          seq <- eventStore.latest(toStreamKey(key)).map { _.id.seq }.run
+          result <- operation.apply(seq).fold(
             EventStreamError.reject(_).left[Event[KK, S, E]].point[F],
             e => eventStore.put(Event.next[KK, S, E](toStreamKey(key), seq, e))
           )
@@ -49,7 +47,6 @@ case class SaveAPI[F[_], KK, E, K, S](
           }
         } yield transform
 
-      case _ =>
-        SaveResult.reject[S](NonEmptyList(Reason("Failed to save after retries"))).point[F]
+      case _ => SaveResult.reject[S](NonEmptyList(Reason("Failed to save after retries"))).point[F]
     }
 }
