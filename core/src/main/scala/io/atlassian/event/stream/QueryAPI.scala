@@ -145,14 +145,11 @@ case class QueryAPI[F[_], KK, E, K, S, V](
    * @return Error when saving snapshot or the snapshot that was saved.
    */
   def forceRefreshPersistedSnapshot(key: K, forceStartAt: S)(implicit F: Monad[F], FC: Catchable[F]): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
-    for {
-      snapshotToSave <- snapshotFold(Snapshot.zero, eventStore.get(toStreamKey(key), Some(forceStartAt)), acc(key))
-      saveResult <- persistSnapshot(key, snapshotToSave, None)
-    } yield saveResult
+    snapshotFold(Snapshot.zero, eventStore.get(toStreamKey(key), Some(forceStartAt)), acc(key)) >>= { persistSnapshot(key, _, None) }
 
   /**
-   * Save the given `snapshot` if it is at a different sequence number to `previousSnapshot`. Set `previousSnapshot`
-   * to None to force a save.
+   * Save the given `snapshot` if it is at a different sequence number to `previousSnapshot`.
+   * Set `previousSnapshot` to None to force a save.
    */
   def persistSnapshot(key: K, snapshot: Snapshot[S, V], previousSnapshot: Option[Snapshot[S, V]])(implicit F: Applicative[F]): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
     if (snapshot.seq != previousSnapshot.map { _.seq })

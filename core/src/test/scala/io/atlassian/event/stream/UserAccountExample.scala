@@ -109,15 +109,15 @@ object UserAccountExample {
   }
 
   object DataAccess {
-    def apply[F[_]: Monad: Catchable, KK](taskToF: Task ~> F, queryAPI: QueryAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User]): DataAccess[F] =
+    def apply[F[_]: Monad, KK](taskToF: Task ~> F, queryAPI: QueryAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User]): DataAccess[F] =
       new DataAccess[F] {
-        lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long](taskToF, queryAPI.toStreamKey, queryAPI.eventStore, DefaultExecutor)
+        lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long](taskToF, queryAPI.toStreamKey, queryAPI.eventStore)
         def saveUser(u: User): F[SaveResult[Long]] = {
           val event = InsertUser(u.id.userId, u.name, u.username)
           val operation = Operation[Long, UserAccountEvent] { _ =>
             Operation.Result.success(event)
           }
-          saveAPI.save(SaveAPIConfig.default)(CompanyUsername(u.id.companyId, u.username), operation)
+          saveAPI.save(SaveAPIConfig.default(DefaultExecutor))(CompanyUsername(u.id.companyId, u.username), operation)
         }
       }
   }

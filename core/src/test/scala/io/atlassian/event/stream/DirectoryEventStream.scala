@@ -119,8 +119,7 @@ object DirectoryEventStream {
     SaveAPI(
       NaturalTransformation.refl,
       query.toStreamKey,
-      query.eventStore,
-      DefaultExecutor
+      query.eventStore
     )
 }
 
