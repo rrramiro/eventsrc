@@ -1,17 +1,15 @@
 package io.atlassian.event
 
-import org.joda.time.DateTime
-import scala.concurrent.duration.FiniteDuration
+import scalaz.stream.{ Cause, Process }
 
-import scalaz.concurrent.Task
-import scalaz.stream.async.mutable.{ Topic => ScalazTopic }
-import scalaz.stream.time
-import scalaz.stream.{ Cause, DefaultScheduler, Process, Sink }
-import scalaz.syntax.applicative._
-
-import io.atlassian.event.stream.{ Event, EventId, EventStorage }
+import io.atlassian.event.stream.Event
 
 object Topic {
+  def apply[F[_]] =
+    new Topic[F] {}
+}
+
+trait Topic[F[_]] {
   /**
    * Concatenates processes together, using the last sequence ID
    * to generate a new tail.
@@ -21,20 +19,15 @@ object Topic {
     "org.brianmckenna.wartremover.warts.IsInstanceOf",
     "org.brianmckenna.wartremover.warts.AsInstanceOf"
   ))
-  def atEnd[KK, S, E](f: Option[S] => Process[Task, Event[KK, S, E]]): Process[Task, E] = {
-    def go(p: Process[Task, Event[KK, S, E]], s: Option[S]): Process[Task, E] =
-      p.step match {
-        case Process.Step(awt @ Process.Await(_, _), cont) =>
-          awt.extend(p => go(p +: cont, s))
-        case Process.Step(emt @ Process.Emit(e), cont) =>
-          emt.map(_.operation) ++
-            go(cont.continue, e.lastOption.map(_.id.seq))
-        case hlt @ Process.Halt(Cause.End) =>
-          go(f(s), s)
-        case hlt @ Process.Halt(_) =>
-          hlt
+  def atEnd[KK, S, E](next: Option[S] => Process[F, Event[KK, S, E]]): Process[F, E] = {
+    def go(proc: Process[F, Event[KK, S, E]], s: Option[S]): Process[F, E] =
+      proc.step match {
+        case Process.Step(await @ Process.Await(_, _), cont) => await.extend { p => go(p +: cont, s) }
+        case Process.Step(emit @ Process.Emit(e), c)         => emit.map { _.operation } ++ go(c.continue, e.lastOption.map { _.id.seq })
+        case Process.Halt(Cause.End)                         => go(next(s), s)
+        case halt @ Process.Halt(_)                          => halt
       }
 
-    go(f(None), None)
+    go(next(None), None)
   }
 }
