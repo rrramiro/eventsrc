@@ -28,14 +28,14 @@ class TopicSpec extends ScalaCheckSpec {
     (for {
       es <- MemoryEventStorage[Char, Long, String]
       key = 'a'
-      p = Topic.atEnd(es.get(key, _: Option[Long]))
+      p = Topic[Task].atEnd(es.get(key, _: Option[Long]))
       ys <- Task.gatherUnordered(
         List(
           p.take(xs.length).runLog.map(_.toList),
           xs.zipWithIndex.traverse_ {
             case (x, i) =>
               for {
-                _ <- Task.delay { Thread.sleep(5) }
+                _ <- Task.delay { Thread.sleep(2) }
                 latest <- es.latest(key).map(_.id).run
                 eventId = latest.fold(EventId.first(key))(EventId.next)
                 now <- Task.delay { DateTime.now }
