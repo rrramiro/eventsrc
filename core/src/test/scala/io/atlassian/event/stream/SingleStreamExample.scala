@@ -97,7 +97,6 @@ object SingleStreamExample {
 
   def saveAPI[KK, E, K, S, V](query: QueryAPI[Task, KK, E, K, S, V]) =
     SaveAPI(
-      NaturalTransformation.refl,
       query.toStreamKey,
       query.eventStore
     )
