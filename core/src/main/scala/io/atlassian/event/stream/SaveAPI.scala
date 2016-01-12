@@ -18,13 +18,7 @@ case class SaveAPI[F[_], KK, E, K, S](
 ) {
 
   def save(config: SaveAPIConfig)(key: K, operation: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
-    saveWithRetry(key, operation, RetryStrategy(config.retry.unsafePerformIO))
-
-  private def saveWithRetry(key: K, operation: Operation[S, E], r: RetryStrategy[F])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
-    r.tryRun[SaveResult[S]](doSave(key, operation), _.fold(_ => false, _ => false, true)) flatMap {
-      case -\/(result) => result.point[F]
-      case \/-(retry)  => saveWithRetry(key, operation, retry)
-    }
+    Retry[F, SaveResult[S]](doSave(key, operation), RetryStrategy(config.retry), _.fold(_ => false, _ => false, true))
 
   private def doSave(key: K, operation: Operation[S, E])(implicit M: Monad[F], T: Sequence[S]): F[SaveResult[S]] =
     for {
