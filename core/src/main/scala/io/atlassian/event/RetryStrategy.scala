@@ -42,7 +42,7 @@ object RetryStrategy {
                 next <- tries.next
                 result <- next.some {
                   case (d, nextInterval) =>
-                    delay(d) >> retryIntervals(nextInterval, delay).left[X].point[IO]
+                    delay(d).map { _ => retryIntervals(nextInterval, delay).left[X] }
                 }.none { x.right[RetryStrategy[F]].point[IO] }
               } yield result
             }
