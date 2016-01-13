@@ -16,13 +16,14 @@ object RetryIntervals {
 }
 
 private class FullJitterRetryInterval(retryLimit: Int, base: Duration, backoffFactor: Double, current: Int) extends RetryInterval {
-  override def next: IO[Option[(Duration, RetryInterval)]] =
-    IO {
+  override def next: IO[Option[(Duration, RetryInterval)]] = {
+    val nextDouble = IO { scala.util.Random.nextDouble() }
+    nextDouble.map { randomDouble =>
       if (current == retryLimit)
         None
-      else {
-        Some((base * Math.pow(current.toDouble + 1, backoffFactor) * scala.util.Random.nextDouble(),
+      else
+        Some((base * Math.pow(current.toDouble + 1, backoffFactor) * randomDouble,
           new FullJitterRetryInterval(retryLimit, base, backoffFactor, current + 1)))
-      }
     }
+  }
 }

@@ -2,7 +2,7 @@ package io.atlassian.event
 
 import scala.concurrent.duration.Duration
 import scalaz.effect.{ IO, LiftIO }
-import scalaz.{ Monad, \/, -\/, \/- }
+import scalaz.{ Monad, \/ }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.option._

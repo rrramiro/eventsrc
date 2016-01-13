@@ -7,10 +7,13 @@ import scalaz.{ Monad, \/-, -\/ }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
 
-case class SaveAPIConfig(retry: RetryInterval)
+case class SaveAPIConfig[F[_]](retry: RetryStrategy[F])
 
 object SaveAPIConfig {
-  val default = SaveAPIConfig(RetryIntervals.fullJitter(20, 5.millis, 2.0))
+  def default[F[_]: Monad: LiftIO] =
+    SaveAPIConfig(RetryStrategy.retryIntervals(
+      RetryIntervals.fullJitter(20, 5.millis, 2.0), Delays.sleep
+    ))
 }
 
 case class SaveAPI[F[_]: LiftIO, KK, E, K, S](
@@ -18,8 +21,8 @@ case class SaveAPI[F[_]: LiftIO, KK, E, K, S](
     eventStore: EventStorage[F, KK, S, E]
 ) {
 
-  def save(config: SaveAPIConfig)(key: K, operation: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
-    Retry[F, SaveResult[S]](doSave(key, operation), RetryStrategy.retryIntervals(config.retry, Delays.sleep), _.fold(_ => false, _ => false, true))
+  def save(config: SaveAPIConfig[F])(key: K, operation: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
+    Retry[F, SaveResult[S]](doSave(key, operation), config.retry, _.fold(_ => false, _ => false, true))
 
   private def doSave(key: K, operation: Operation[S, E])(implicit M: Monad[F], T: Sequence[S]): F[SaveResult[S]] =
     for {
