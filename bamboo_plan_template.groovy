@@ -71,7 +71,7 @@ export JAVA_HOME=${bamboo.capability.system.jdk.JDK 1.8}
 #https://extranet.atlassian.com/jira/browse/BUILDENG-7018
 export SBT_OPTS="-Dsbt.log.noformat=true -J-XX:MaxPermSize=512M -sbt-dir /opt/bamboo-agent/.sbt -d"
 
-./sbt -Dsbt.log.noformat=true ";set credentials:=Seq(Credentials(\\"Nexus Repository Manager\\", \\"maven.atlassian.com\\", \\"${USER}\\", \\"${PWD}\\")); release with-defaults" -J-Xmx2G
+./sbt -Dsbt.log.noformat=true ";set credentials:=Seq(Credentials(\\"Sonatype Nexus Repository Manager\\", \\"maven.atlassian.com\\", \\"${USER}\\", \\"${PWD}\\")); release with-defaults" -J-Xmx2G
 ''')
 
          task(type:'jUnitParser',description:'Parse test results',
