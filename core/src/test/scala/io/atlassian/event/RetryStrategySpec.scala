@@ -9,28 +9,41 @@ import scala.concurrent.duration.Duration
 import scalaz.concurrent.Task
 
 class RetryStrategySpec extends SpecificationWithJUnit with ScalaCheck {
+  implicit val taskLiftIO = TaskLiftIO
+
   def is =
     s2"""
          This spec tests RetryStrategy
 
-         Evaluated correct number of times  $correctEvaluationCount
+         Evaluated correct number of times for duration list   $correctEvaluationCountDurationList
+         Evaluated correct number of times for retry intervals $correctEvaluationCountRetryInterval
       """
 
-  def correctEvaluationCount = Prop.forAll { (retryCount: ReasonableParameters) =>
+  def correctEvaluationCountDurationList = Prop.forAll { (retryCount: ReasonableParameters) =>
     val counter = new AtomicInteger(0)
     def foo(i: Int): Task[Int] =
       Task.delay {
         counter.incrementAndGet()
       }
 
-    Retry(foo(0), RetryStrategy[Task](Seq.fill(retryCount.count)(Duration(1, "ms"))), { (_: Int) => true }).run === retryCount.count + 1
+    Retry(foo(0), RetryStrategy.durationList[Task](List.fill(retryCount.count)(Duration(1, "ms")), Delays.sleep), { (_: Int) => true }).run === retryCount.count + 1
+  }
+
+  def correctEvaluationCountRetryInterval = Prop.forAll { (retryCount: ReasonableParameters) =>
+    val counter = new AtomicInteger(0)
+    def foo(i: Int): Task[Int] =
+      Task.delay {
+        counter.incrementAndGet()
+      }
+
+    Retry(foo(0), RetryStrategy.retryIntervals[Task](RetryIntervals.fullJitter(retryCount.count, Duration(1, "ms"), 1.0), Delays.sleep), { (_: Int) => true }).run === retryCount.count + 1
   }
 
   case class ReasonableParameters(count: Int)
   implicit val ReasonableParametersArb: Arbitrary[ReasonableParameters] =
     Arbitrary {
       for {
-        count <- Gen.chooseNum(1, 1000)
+        count <- Gen.chooseNum(1, 10)
       } yield ReasonableParameters(count)
     }
 

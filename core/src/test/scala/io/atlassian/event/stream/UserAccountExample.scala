@@ -7,6 +7,7 @@ import io.atlassian.event.stream.memory.{ MemoryEventStorage, MemorySingleSnapsh
 
 import scalaz._
 import scalaz.concurrent.Task
+import scalaz.effect.LiftIO
 import scalaz.std.option._
 import scalaz.syntax.std.option._
 
@@ -109,7 +110,7 @@ object UserAccountExample {
   }
 
   object DataAccess {
-    def apply[F[_]: Monad, KK](queryAPI: QueryAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User]): DataAccess[F] =
+    def apply[F[_]: Monad: LiftIO, KK](queryAPI: QueryAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User]): DataAccess[F] =
       new DataAccess[F] {
         lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long](queryAPI.toStreamKey, queryAPI.eventStore)
         def saveUser(u: User): F[SaveResult[Long]] = {
