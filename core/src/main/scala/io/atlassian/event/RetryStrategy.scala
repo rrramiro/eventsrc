@@ -14,40 +14,31 @@ trait RetryStrategy[F[_]] {
 object RetryStrategy {
   def durationList[F[_]: Monad: LiftIO](tries: List[Duration], delay: Duration => IO[Unit]): RetryStrategy[F] =
     new RetryStrategy[F] {
-      def tryRun[X](a: F[X], retriable: X => Boolean): F[RetryStrategy[F] \/ X] =
-        for {
-          x <- a
-          afterDelay <- if (!retriable(x)) x.right[RetryStrategy[F]].point[F]
-          else {
-            tries match {
-              case d :: ds =>
-                LiftIO[F].liftIO {
-                  delay(d)
-                } >> durationList(ds, delay).left.point[F]
-              case _ => x.right[RetryStrategy[F]].point[F]
-            }
+      def tryRun[A](fa: F[A], retriable: A => Boolean): F[RetryStrategy[F] \/ A] =
+        fa >>= { a =>
+          if (!retriable(a)) a.right[RetryStrategy[F]].point[F]
+          else tries match {
+            case d :: ds => LiftIO[F].liftIO {
+              delay(d)
+            }.map { _ => durationList(ds, delay).left }
+            case _ => a.right[RetryStrategy[F]].point[F]
           }
-        } yield afterDelay
+        }
     }
 
   def retryIntervals[F[_]: Monad: LiftIO](tries: RetryInterval, delay: Duration => IO[Unit]): RetryStrategy[F] =
     new RetryStrategy[F] {
-      def tryRun[X](a: F[X], retriable: X => Boolean): F[RetryStrategy[F] \/ X] =
-        for {
-          x <- a
-          afterDelay <- if (!retriable(x)) x.right[RetryStrategy[F]].point[F]
-          else {
-            LiftIO[F].liftIO {
-              for {
-                next <- tries.next
-                result <- next.some {
-                  case (d, nextInterval) =>
-                    delay(d).map { _ => retryIntervals(nextInterval, delay).left[X] }
-                }.none { x.right[RetryStrategy[F]].point[IO] }
-              } yield result
+      def tryRun[A](fa: F[A], retriable: A => Boolean): F[RetryStrategy[F] \/ A] =
+        fa >>= { a =>
+          if (!retriable(a)) a.right[RetryStrategy[F]].point[F]
+          else LiftIO[F].liftIO {
+            tries.next >>= {
+              _.some {
+                case (d, next) => delay(d).map { _ => retryIntervals(next, delay).left[A] }
+              }.none { a.right[RetryStrategy[F]].point[IO] }
             }
           }
-        } yield afterDelay
+        }
     }
 }
 
