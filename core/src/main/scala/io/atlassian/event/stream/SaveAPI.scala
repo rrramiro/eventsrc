@@ -1,52 +1,40 @@
 package io.atlassian.event
 package stream
 
-import java.util.concurrent.ScheduledExecutorService
-
 import scala.concurrent.duration._
-import scalaz.{ Monad, NonEmptyList, ~>, \/-, -\/ }
+import scalaz.effect.LiftIO
+import scalaz.{ Monad, \/-, -\/ }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
-import scalaz.concurrent.Task
 
-case class SaveAPIConfig(retry: Retry, executor: ScheduledExecutorService)
+case class SaveAPIConfig[F[_]](retry: RetryStrategy[F])
 
 object SaveAPIConfig {
-  def default(executor: ScheduledExecutorService) = SaveAPIConfig(Retry.fullJitter(20, 5.millis, 2.0), executor)
+  def default[F[_]: Monad: LiftIO] =
+    SaveAPIConfig(RetryStrategy.retryIntervals(
+      RetryIntervals.fullJitter(20, 5.millis, 2.0), Delays.sleep
+    ))
 }
 
-case class SaveAPI[F[_], KK, E, K, S](
-    taskToF: Task ~> F,
+case class SaveAPI[F[_]: LiftIO, KK, E, K, S](
     toStreamKey: K => KK,
     eventStore: EventStorage[F, KK, S, E]
 ) {
 
-  def save(config: SaveAPIConfig)(key: K, operation: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
-    saveWithRetry(key, operation, Seq(0.milli) ++ config.retry.run, config.executor)
+  def save(config: SaveAPIConfig[F])(key: K, operation: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
+    Retry[F, SaveResult[S]](doSave(key, operation), config.retry, _.fold(_ => false, _ => false, true))
 
-  // TODO: Maybe just make a MonadTask trait and use it as a constraint.
-  private def saveWithRetry(key: K, operation: Operation[S, E], durations: Seq[Duration], executor: ScheduledExecutorService)(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
-    durations match {
-      case d :: ds =>
-        for {
-          _ <- taskToF {
-            if (d.toMillis == 0)
-              Task.now(())
-            else
-              Task.schedule((), d)(executor)
-          }
-          seq <- eventStore.latest(toStreamKey(key)).map { _.id.seq }.run
-          result <- operation.apply(seq).fold(
-            EventStreamError.reject(_).left[Event[KK, S, E]].point[F],
-            e => eventStore.put(Event.next[KK, S, E](toStreamKey(key), seq, e))
-          )
-          transform <- result match {
-            case -\/(EventStreamError.DuplicateEvent) => saveWithRetry(key, operation, ds, executor)
-            case -\/(EventStreamError.Rejected(r))    => SaveResult.reject[S](r).point[F]
-            case \/-(event)                           => SaveResult.success[S](event.id.seq).point[F]
-          }
-        } yield transform
-
-      case _ => SaveResult.reject[S](NonEmptyList(Reason("Failed to save after retries"))).point[F]
-    }
+  private def doSave(key: K, operation: Operation[S, E])(implicit M: Monad[F], T: Sequence[S]): F[SaveResult[S]] =
+    for {
+      seq <- eventStore.latest(toStreamKey(key)).map { _.id.seq }.run
+      result <- operation.apply(seq).fold(
+        EventStreamError.reject(_).left[Event[KK, S, E]].point[F],
+        e => eventStore.put(Event.next[KK, S, E](toStreamKey(key), seq, e))
+      )
+      transform <- result match {
+        case -\/(EventStreamError.DuplicateEvent) => SaveResult.timedOut[S].point[F]
+        case -\/(EventStreamError.Rejected(r))    => SaveResult.reject[S](r).point[F]
+        case \/-(event)                           => SaveResult.success[S](event.id.seq).point[F]
+      }
+    } yield transform
 }

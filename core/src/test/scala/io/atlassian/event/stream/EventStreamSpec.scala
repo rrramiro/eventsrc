@@ -5,7 +5,7 @@ import io.atlassian.event.stream.DirectoryEventStream.DirectoryId
 import org.scalacheck.Prop
 import org.specs2.{ ScalaCheck, SpecificationWithJUnit }
 
-import scalaz.{ \/, OptionT }
+import scalaz.{ OptionT }
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.syntax.either._
@@ -24,9 +24,10 @@ class EventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
     val api = DirectoryEventStream.allUsersQueryAPIWithNoSnapshots(AlwaysFailingDirectoryEventStream.eventStore)
     val saveApi = DirectoryEventStream.allUsersSaveAPI(api)
 
-    saveApi.save(SaveAPIConfig.default(DefaultExecutor))(k, Operation.insert(DirectoryEvent.addUser(u1))).run.fold(
+    saveApi.save(SaveAPIConfig.default)(k, Operation.insert(DirectoryEvent.addUser(u1))).run.fold(
       { _ => failure }, // Fail if we somehow succeeded
-      { _ => success }
+      { _ => failure },
+      { success }
     )
   }.set(minTestsOk = 1)
 }

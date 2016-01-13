@@ -7,6 +7,7 @@ import io.atlassian.event.stream.memory.{ MemoryEventStorage, MemorySingleSnapsh
 
 import scalaz._
 import scalaz.concurrent.Task
+import scalaz.effect.LiftIO
 import scalaz.std.option._
 import scalaz.syntax.std.option._
 
@@ -109,15 +110,15 @@ object UserAccountExample {
   }
 
   object DataAccess {
-    def apply[F[_]: Monad, KK](taskToF: Task ~> F, queryAPI: QueryAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User]): DataAccess[F] =
+    def apply[F[_]: Monad: LiftIO, KK](queryAPI: QueryAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User]): DataAccess[F] =
       new DataAccess[F] {
-        lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long](taskToF, queryAPI.toStreamKey, queryAPI.eventStore)
+        lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long](queryAPI.toStreamKey, queryAPI.eventStore)
         def saveUser(u: User): F[SaveResult[Long]] = {
           val event = InsertUser(u.id.userId, u.name, u.username)
           val operation = Operation[Long, UserAccountEvent] { _ =>
             Operation.Result.success(event)
           }
-          saveAPI.save(SaveAPIConfig.default(DefaultExecutor))(CompanyUsername(u.id.companyId, u.username), operation)
+          saveAPI.save(SaveAPIConfig.default)(CompanyUsername(u.id.companyId, u.username), operation)
         }
       }
   }
@@ -137,7 +138,7 @@ object UserAccountExample {
         userByName = userByNameQuery(eventStore, userByNameStorage) // QueryAPI[Task, KK, UserAccountEvent, CompanyUsername, Long, User]
 
         // 3. Create SaveAPIs defined for stream. This is done when creating DataAccess which has saveUser with Operation logic
-        dataLayer = DataAccess[Task, CompanyId](NaturalTransformation.refl, userByName)
+        dataLayer = DataAccess[Task, CompanyId](userByName)
 
         _ <- dataLayer.saveUser(User(CompanyUserId("abccom", "a"), "Fred", "fred")) // Task[SaveResult[User]]
         saved <- userById.get(CompanyUserId("abccom", "a"), QueryConsistency.LatestEvent)
