@@ -19,7 +19,7 @@ trait Modules {
 
   lazy val coreTest = core % depTest
 
-  lazy val dynamo = project("dynamodb", Dependencies.dynamodb).dependsOn(coreTest)
+  lazy val dynamo = project("dynamodb", Dependencies.dynamodb).dependsOn(coreTest).settings(parallelExecution in Test := false)
 
   // aggregate
   lazy val all = 
