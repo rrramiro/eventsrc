@@ -35,12 +35,10 @@ class DynamoEventStorage[F[_], KK, S, E](
     C: Catchable[F]
 ) extends EventStorage[F, KK, S, E] {
 
-  private[dynamo]type EID = EventId[KK, S]
-  private[dynamo] object EID {
-    def apply(k: KK, s: S): EID = EventId[KK, S](k, s)
-    def unapply(e: EID): Option[(KK, S)] = EventId.unapply[KK, S](e)
-  }
-  private[dynamo]type EV = Event[KK, S, E]
+  lazy val columns = EventSourceColumns(tableDef.key, tableDef.hash, tableDef.range, tableDef.value)
+
+  type EID = columns.EID
+  type EV = columns.EV
 
   private object table extends Table {
     type K = EID
@@ -49,24 +47,12 @@ class DynamoEventStorage[F[_], KK, S, E](
     type R = S
   }
 
-  private[dynamo] object Columns {
-    val eventId = Column.compose2[EID](tableDef.hash.column, tableDef.range.column) { case EID(k, s) => (k, s) } { case (k, s) => EventId(k, s) }
-    val lastModified = Column[DateTime]("LastModifiedTimestamp").column
-
-    val event = Column.compose3[EV](eventId.liftOption, lastModified, tableDef.value) {
-      case Event(id, ts, tx) => (None, ts, tx)
-    } {
-      case (Some(id), ts, tx) => Event(id, ts, tx)
-      case (None, _, _)       => ??? // Shouldn't happen, it means there is no event Id in the row
-    }
-  }
-
   private val interpret: table.DBAction ~> F =
     runAction compose
       table.transform(DynamoDB.interpreter(table)(schema))
 
   lazy val schema =
-    TableDefinition.from[EID, EV, KK, S](tableDef.name, Columns.eventId, Columns.event, tableDef.hash, tableDef.range)
+    TableDefinition.from[EID, EV, KK, S](tableDef.name, columns.eventId, columns.event, tableDef.hash, tableDef.range)
 
   override def get(key: KK, fromSeq: Option[S]): Process[F, Event[KK, S, E]] = {
     import Process._
