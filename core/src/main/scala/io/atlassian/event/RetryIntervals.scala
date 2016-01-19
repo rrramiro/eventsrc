@@ -7,7 +7,7 @@ trait RetryInterval {
   def next: IO[Option[(Duration, RetryInterval)]]
 }
 
-object RetryIntervals {
+object RetryInterval {
   def fullJitter(retryLimit: Int, base: Duration, backoffFactor: Double): RetryInterval =
     if (retryLimit <= 0 || base <= 0.millis || backoffFactor < 1)
       throw new IllegalArgumentException(s"Parameters cannot be negative")

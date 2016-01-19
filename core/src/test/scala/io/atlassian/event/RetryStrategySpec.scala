@@ -36,7 +36,7 @@ class RetryStrategySpec extends SpecificationWithJUnit with ScalaCheck {
         counter.incrementAndGet()
       }
 
-    Retry(foo(0), RetryStrategy.retryIntervals[Task](RetryIntervals.fullJitter(retryCount.count, Duration(1, "ms"), 1.0), Delays.sleep), { (_: Int) => true }).run === retryCount.count + 1
+    Retry(foo(0), RetryStrategy.retryIntervals[Task](RetryInterval.fullJitter(retryCount.count, Duration(1, "ms"), 1.0), Delays.sleep), { (_: Int) => true }).run === retryCount.count + 1
   }
 
   case class ReasonableParameters(count: Int)
