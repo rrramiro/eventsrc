@@ -158,7 +158,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
       DBEventStorage.put(event).run
       DynamoDB.get[DBEventStorage.EID, DBEventStorage.EV](eventId)(
         DynamoMappings.tableName,
-        DBEventStorage.Columns.eventId, DBEventStorage.Columns.event
+        DBEventStorage.columns.eventId, DBEventStorage.columns.event
       ) must returnValue(event.some)
     }
 
