@@ -25,9 +25,9 @@ class EventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
     val saveApi = DirectoryEventStream.allUsersSaveAPI(api)
 
     saveApi.save(SaveAPIConfig.default)(k, Operation.insert(DirectoryEvent.addUser(u1))).run.fold(
-      { _ => failure }, // Fail if we somehow succeeded
-      { _ => failure },
-      { success }
+      { (_, _) => failure }, // Fail if we somehow succeeded
+      { (_, _) => failure },
+      { _ => success }
     )
   }.set(minTestsOk = 1)
 }

@@ -18,9 +18,9 @@ object SaveAPIConfig {
 
 case class SaveAPI[F[_]: LiftIO, KK, E, K, S](toStreamKey: K => KK, store: EventStorage[F, KK, S, E]) {
   def save(config: SaveAPIConfig[F])(key: K, operation: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
-    Retry[F, SaveResult[S]](doSave(key, operation), config.retry, _.fold(_ => false, _ => false, true))
+    Retry[F, SaveResult[S]](doSave(key, operation), config.retry, _.fold((_, _) => false, (_, _) => false, _ => true))
 
-  private def doSave(key: K, operation: Operation[S, E])(implicit M: Monad[F], T: Sequence[S]): F[SaveResult[S]] =
+  private def doSave(key: K, operation: Operation[S, E])(retryCount: Int)(implicit M: Monad[F], T: Sequence[S]): F[SaveResult[S]] =
     for {
       seq <- store.latest(toStreamKey(key)).map { _.id.seq }.run
       result <- operation.apply(seq).fold(
@@ -28,8 +28,8 @@ case class SaveAPI[F[_]: LiftIO, KK, E, K, S](toStreamKey: K => KK, store: Event
         e => store.put(Event.next[KK, S, E](toStreamKey(key), seq, e))
       )
     } yield result match {
-      case -\/(EventStreamError.DuplicateEvent) => SaveResult.timedOut[S]
-      case -\/(EventStreamError.Rejected(r))    => SaveResult.reject[S](r)
-      case \/-(event)                           => SaveResult.success[S](event.id.seq)
+      case -\/(EventStreamError.DuplicateEvent) => SaveResult.timedOut[S](retryCount)
+      case -\/(EventStreamError.Rejected(r))    => SaveResult.reject[S](r, retryCount)
+      case \/-(event)                           => SaveResult.success[S](event.id.seq, retryCount)
     }
 }
