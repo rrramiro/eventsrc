@@ -18,7 +18,7 @@ object SaveAPIConfig {
 
 case class SaveAPI[F[_]: LiftIO, KK, E, K, S](toStreamKey: K => KK, store: EventStorage[F, KK, S, E]) {
   def save(config: SaveAPIConfig[F])(key: K, operation: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
-    Retry[F, SaveResult[S]](doSave(key, operation), config.retry, _.fold((_, _) => false, (_, _) => false, _ => true))
+    Retry[F, SaveResult[S]](doSave(key, operation), config.retry, _.fold(_ => false, _ => false, true))
 
   private def doSave(key: K, operation: Operation[S, E])(retryCount: Int)(implicit M: Monad[F], T: Sequence[S]): F[SaveResult[S]] =
     for {

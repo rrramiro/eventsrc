@@ -9,12 +9,14 @@ import scalaz.NonEmptyList
 sealed trait SaveResult[S] {
   import SaveResult._
 
-  def fold[X](success: (S, Int) => X, rejected: (NonEmptyList[Reason], Int) => X, timedOut: Int => X): X =
+  def fold[X](success: S => X, rejected: NonEmptyList[Reason] => X, timedOut: => X): X =
     this match {
-      case Success(v, c)      => success(v, c)
-      case Reject(reasons, c) => rejected(reasons, c)
-      case TimedOut(c)        => timedOut(c)
+      case Success(v, _)      => success(v)
+      case Reject(reasons, _) => rejected(reasons)
+      case TimedOut(_)        => timedOut
     }
+
+  def retryCount: Int
 }
 
 object SaveResult {
