@@ -2,6 +2,8 @@ package io.atlassian.event
 package stream
 
 import org.joda.time.DateTime
+import scalaz.{ Order, Ordering }
+import scalaz.syntax.order._
 
 /**
  * Event wraps the event payload with common information (event id and time of the event)
@@ -18,6 +20,12 @@ object Event {
 
   def at[KK, S, E](e: Event[KK, S, E]): (S, DateTime) =
     (e.id.seq, e.time)
+
+  implicit def eventOrder[KK, S: Order, E]: Order[Event[KK, S, E]] =
+    new Order[Event[KK, S, E]] {
+      def order(x: Event[KK, S, E], y: Event[KK, S, E]): Ordering =
+        x.id.seq ?|? y.id.seq
+    }
 
   object syntax {
     implicit class EventSyntax[KK, S, E](val e: Event[KK, S, E]) extends AnyVal {
