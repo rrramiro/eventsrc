@@ -15,7 +15,7 @@ import scalaz.syntax.order._
 trait EventStorage[F[_], K, S, E] { self =>
   /**
    * Retrieve a stream of events from the underlying data store. This stream should take care of pagination and
-   * cleanup of any underlying resources (e.g. closing connections if required).
+   * cleanup of any underlying resources (e.g. closing connections if required). Must be in order of sequence.
    * @param key The key
    * @param fromSeq The starting sequence to get events from (exclusive). None to get from the start.
    * @return Stream of events.
@@ -68,18 +68,20 @@ object EventStorage {
           private def restR(s: Option[S], x: Option[Event[K, S, E]]): EventTee =
             tee.feedR(x.toSeq)(tee.passR).dropWhile { rightE => s.fold(false)(_ >= rightE.id.seq) }
 
-          private def merge(fromSeq: Option[S], left: Option[Event[K, S, E]], right: Option[Event[K, S, E]]): EventTee = {
+          private def merge(fromSeq: Option[S], left: Option[Event[K, S, E]], right: Option[Event[K, S, E]]): EventTee =
             (fromSeq, left, right) match {
               // when the left slot is empty, await an element from the left.
               // if the left branch has terminated, forward the rest of the right branch.
-              case (_, None, _) => tee.receiveLOr(restR(fromSeq, right)) { leftE =>
-                merge(fromSeq, Some(leftE), right)
-              }
+              case (_, None, _) =>
+                tee.receiveLOr(restR(fromSeq, right)) { leftE =>
+                  merge(fromSeq, Some(leftE), right)
+                }
               // when the right slot is empty, await an element from the right.
               // if the right branch has terminated, forward the rest of the left branch.
-              case (_, _, None) => tee.receiveROr(restL(fromSeq, left)) { rightE =>
-                merge(fromSeq, left, Some(rightE))
-              }
+              case (_, _, None) =>
+                tee.receiveROr(restL(fromSeq, left)) { rightE =>
+                  merge(fromSeq, left, Some(rightE))
+                }
               // if the left slot has an event older than the current sequence, discard it.
               case (Some(seq), Some(leftE), _) if seq >= leftE.id.seq =>
                 merge(fromSeq, None, right)
@@ -93,7 +95,6 @@ object EventStorage {
                 else
                   Process.emit(rightE).append(merge(Some(rightE.id.seq), left, None))
             }
-          }
 
           def get(key: K, fromSeq: Option[S]): Process[F, Event[K, S, E]] = {
             val primaryGet = primary.get(key, fromSeq)
