@@ -17,18 +17,18 @@ import scalaz.{ \/, Catchable, Monad, OptionT, Order, Semigroup, State }
 case class EventState[KK, S, E, A](run: State[List[Event[KK, S, E]], A])
 
 object EventState {
-  implicit def eventStateMonad[KK, S, E]: Monad[({ type l[a] = EventState[KK, S, E, a] })#l] =
-    new Monad[({ type l[a] = EventState[KK, S, E, a] })#l] {
+  implicit def eventStateMonad[KK, S, E]: Monad[EventState[KK, S, E, ?]] =
+    new Monad[EventState[KK, S, E, ?]] {
       def point[A](a: => A): EventState[KK, S, E, A] =
-        EventState(a.point[({ type l[a] = State[List[Event[KK, S, E]], a] })#l])
+        EventState(a.point[State[List[Event[KK, S, E]], ?]])
 
       def bind[A, B](fa: EventState[KK, S, E, A])(f: A => EventState[KK, S, E, B]): EventState[KK, S, E, B] =
         EventState(fa.run.flatMap(f(_).run))
     }
 
   // scalaz-stream makes us do these gross things.
-  implicit def eventStateCatchable[KK, S, E]: Catchable[({ type l[a] = EventState[KK, S, E, a] })#l] =
-    new Catchable[({ type l[a] = EventState[KK, S, E, a] })#l] {
+  implicit def eventStateCatchable[KK, S, E]: Catchable[EventState[KK, S, E, ?]] =
+    new Catchable[EventState[KK, S, E, ?]] {
       def attempt[A](f: EventState[KK, S, E, A]): EventState[KK, S, E, Throwable \/ A] =
         EventState(f.run.map(_.right))
 
@@ -69,24 +69,34 @@ class EventStorageSpec extends SpecificationWithJUnit with ScalaCheck {
          EventStorage Semigroup is idempotent       ${eventStorageIdempotenceLaw[Int, String]}
     """
 
-  def storage[KK, S, E]: EventStorage[({ type l[a] = EventState[KK, S, E, a] })#l, KK, S, E] =
-    new EventStorage[({ type l[a] = EventState[KK, S, E, a] })#l, KK, S, E] {
-      def get(key: KK, fromSeq: Option[S]): Process[({ type l[a] = EventState[KK, S, E, a] })#l, Event[KK, S, E]] =
-        Process.await[({ type l[a] = EventState[KK, S, E, a] })#l, List[Event[KK, S, E]], Event[KK, S, E]](EventState(State.get[List[Event[KK, S, E]]]))(Process.emitAll[Event[KK, S, E]])
+  def storage[KK, S, E]: EventStorage[EventState[KK, S, E, ?], KK, S, E] =
+    new EventStorage[EventState[KK, S, E, ?], KK, S, E] {
+      def get(key: KK, fromSeq: Option[S]): Process[EventState[KK, S, E, ?], Event[KK, S, E]] =
+        Process.await[EventState[KK, S, E, ?], List[Event[KK, S, E]], Event[KK, S, E]] {
+          EventState(State.get[List[Event[KK, S, E]]])
+        } {
+          Process.emitAll[Event[KK, S, E]]
+        }
 
       def put(event: Event[KK, S, E]): EventState[KK, S, E, EventStreamError \/ Event[KK, S, E]] =
-        EventState[KK, S, E, EventStreamError \/ Event[KK, S, E]](State.modify[List[Event[KK, S, E]]](event :: _) as event.right)
+        EventState[KK, S, E, EventStreamError \/ Event[KK, S, E]] {
+          State.modify[List[Event[KK, S, E]]](event :: _) as event.right
+        }
 
-      def latest(key: KK): OptionT[({ type l[a] = EventState[KK, S, E, a] })#l, Event[KK, S, E]] =
-        OptionT[({ type l[a] = EventState[KK, S, E, a] })#l, Event[KK, S, E]](EventState[KK, S, E, Option[Event[KK, S, E]]](State.gets[List[Event[KK, S, E]], Option[Event[KK, S, E]]](_.headOption)))
+      def latest(key: KK): OptionT[EventState[KK, S, E, ?], Event[KK, S, E]] =
+        OptionT[EventState[KK, S, E, ?], Event[KK, S, E]] {
+          EventState[KK, S, E, Option[Event[KK, S, E]]] {
+            State.gets[List[Event[KK, S, E]], Option[Event[KK, S, E]]] { _.headOption }
+          }
+        }
     }
 
   // Scala fails to find this instance of the EventStorage.eventStorageSemigroup implicit without help.
-  implicit def eventStorageSemigroup[E, S: Order]: Semigroup[EventStorage[({ type l[a] = EventState[Unit, S, E, a] })#l, Unit, S, E]] =
-    EventStorage.eventStorageSemigroup[({ type l[a] = EventState[Unit, S, E, a] })#l, Unit, S, E]
+  implicit def eventStorageSemigroup[E, S: Order]: Semigroup[EventStorage[EventState[Unit, S, E, ?], Unit, S, E]] =
+    EventStorage.eventStorageSemigroup[EventState[Unit, S, E, ?], Unit, S, E]
 
-  def getStorage[E, S](log: TestEventLog[Unit, S, E])(s: EventStorage[({ type l[a] = EventState[Unit, S, E, a] })#l, Unit, S, E]): List[Event[Unit, S, E]] =
-    s.get((), None).runLog.map(_.toList).run.eval(log.list)
+  def getStorage[E, S](log: TestEventLog[Unit, S, E])(s: EventStorage[EventState[Unit, S, E, ?], Unit, S, E]): List[Event[Unit, S, E]] =
+    s.get((), None).runLog.map { _.toList }.run.eval(log.list)
 
   def eventStorageIdempotenceLaw[S: Order: Arbitrary, E: Arbitrary] =
     Prop.forAll { (log: TestEventLog[Unit, S, E]) =>

@@ -39,6 +39,7 @@ object Settings {
     , crossScalaVersions  := Seq("2.11.7", "2.10.5")
     , ReleaseKeys.crossBuild := true
     , autoScalaLibrary := false
+    , ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
     , scalacOptions ++= scalacFlags 
     , javacOptions ++= Seq("-encoding", "UTF-8")
     , resolvers ++= Seq(
@@ -56,6 +57,7 @@ object Settings {
       )
     , credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
     , addCompilerPlugin("org.scalamacros"        % "paradise"       % "2.0.1" cross CrossVersion.full)
+    , addCompilerPlugin("org.spire-math"         % "kind-projector" % "0.7.1" cross CrossVersion.binary)
     )
 
   lazy val scalariformPrefs = {
