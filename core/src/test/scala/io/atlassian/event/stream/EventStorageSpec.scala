@@ -95,7 +95,10 @@ object TestEvent {
     Arbitrary(genEvent[KK, S, E].map(TestEvent[KK, S, E]))
 }
 
-case class TestEventStorage[KK, S, E](run: EventStorage[SafeCatchable, KK, S, E])
+case class TestEventStorage[KK, S, E](
+  underlyingGet: List[Event[KK, S, E]],
+  run: EventStorage[SafeCatchable, KK, S, E]
+)
 
 object TestEventStorage {
   val genReason: Gen[Reason] =
@@ -110,12 +113,12 @@ object TestEventStorage {
       } yield EventStreamError.reject(NonEmptyList(head, tail: _*))
     )
 
-  def genGet[F[_], KK: Arbitrary, S: Order: Arbitrary, E: Arbitrary]: Gen[Process[F, Event[KK, S, E]]] =
+  def genGet[KK: Arbitrary, S: Order: Arbitrary, E: Arbitrary]: Gen[List[Event[KK, S, E]]] =
     for {
       list <- Gen.listOf(TestEvent.genEvent[KK, S, E])
       sorted = list.sortBy(_.id.seq)(Order[S].toScalaOrdering)
       unique = EventStorageSpec.nubBy(sorted)(_.id.seq === _.id.seq)
-    } yield Process.emitAll(unique)
+    } yield unique
 
   def genPut[KK: Arbitrary, S: Arbitrary, E: Arbitrary]: Gen[SafeCatchable[EventStreamError \/ Event[KK, S, E]]] =
     Gen.frequency[SafeCatchable[EventStreamError \/ Event[KK, S, E]]](
@@ -135,16 +138,17 @@ object TestEventStorage {
       ).map(_.liftM[OptionT])
     )
 
-  implicit def arbitraryTestEventStorage[KK: Arbitrary, S: Order: Arbitrary, E: Arbitrary]: Arbitrary[TestEventStorage[KK, S, E]] =
+  implicit def arbitraryTestEventStorage[KK: Equal: Arbitrary, S: Order: Arbitrary, E: Arbitrary]: Arbitrary[TestEventStorage[KK, S, E]] =
     Arbitrary(
       for {
-        g <- genGet[SafeCatchable, KK, S, E]
+        g <- genGet[KK, S, E]
         p <- genPut[KK, S, E]
         l <- genLatest[KK, S, E]
       } yield TestEventStorage(
+        g,
         new EventStorage[SafeCatchable, KK, S, E] {
           def get(key: KK, fromSeq: Option[S]): Process[SafeCatchable, Event[KK, S, E]] =
-            g
+            Process.emitAll(g.filter(_.id.key === key))
 
           def put(event: Event[KK, S, E]): SafeCatchable[EventStreamError \/ Event[KK, S, E]] =
             p
@@ -166,6 +170,7 @@ class EventStorageSpec extends SpecificationWithJUnit with ScalaCheck {
     s2"""
       EventStorage merge
 
+      EventStorage merge is consistent with filter, nubBy, orderBy  ${getWithLists[Boolean, Int, String]}
       EventStorage merge gives results in ascending order           ${getPreservesOrder[Boolean, Int, String]}
       EventStorage merge gives results without duplicate sequences  ${getNoDuplicates[Boolean, Int, String]}
       EventStorage merge gives equal or more results than input     ${getGreaterResults[Boolean, Int, String]}
@@ -195,14 +200,25 @@ class EventStorageSpec extends SpecificationWithJUnit with ScalaCheck {
   def latest[F[_], KK, S, E](key: KK)(es: EventStorage[F, KK, S, E]): OptionT[F, Event[KK, S, E]] =
     es.latest(key)
 
-  def orderBy[A, B: Order](f: A => B)(xs: List[A]): List[A] =
+  def orderBy[A, B: Order](xs: List[A])(f: A => B): List[A] =
     xs.sorted(Order[B].contramap[A](f).toScalaOrdering)
+
+  def getWithLists[KK: Equal: Arbitrary, S: Order: Arbitrary, E: Equal: Arbitrary] =
+    Prop.forAll { (s1: TestEventStorage[KK, S, E], s2: TestEventStorage[KK, S, E], key: KK) =>
+      val go = get[SafeCatchable, KK, S, E](key) _
+      val xs = s1.underlyingGet ++ s2.underlyingGet
+      val filtered = xs.filter(_.id.key === key)
+      val unique = EventStorageSpec.nubBy(filtered)(_.id === _.id)
+      val sorted = orderBy(unique)((_: Event[KK, S, E]).id.seq)
+
+      sorted must equal(go(s1.run |+| s2.run).get)
+    }
 
   def getPreservesOrder[KK: Equal: Arbitrary, S: Order: Arbitrary, E: Equal: Arbitrary] =
     Prop.forAll { (s1: TestEventStorage[KK, S, E], s2: TestEventStorage[KK, S, E], key: KK) =>
       val go = get[SafeCatchable, KK, S, E](key) _
 
-      go(s1.run |+| s2.run).map(orderBy((_: Event[KK, S, E]).id.seq)) must equal(go(s1.run |+| s2.run))
+      go(s1.run |+| s2.run).map(orderBy(_)((_: Event[KK, S, E]).id.seq)) must equal(go(s1.run |+| s2.run))
     }
 
   def getNoDuplicates[KK: Equal: Arbitrary, S: Order: Arbitrary, E: Equal: Arbitrary] =
