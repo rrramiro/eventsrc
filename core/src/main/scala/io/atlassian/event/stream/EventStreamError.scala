@@ -1,7 +1,8 @@
 package io.atlassian.event
 package stream
 
-import scalaz.NonEmptyList
+import scalaz.{ Equal, NonEmptyList }
+import scalaz.syntax.equal._
 
 /**
  * EventStreamError represents any error conditions that are useful to represent for event sources. In particular,
@@ -16,4 +17,14 @@ object EventStreamError {
   case object DuplicateEvent extends EventStreamError
 
   case class Rejected(s: NonEmptyList[Reason]) extends EventStreamError
+
+  implicit val eventStreamErrorEqual: Equal[EventStreamError] =
+    new Equal[EventStreamError] {
+      def equal(a1: EventStreamError, a2: EventStreamError): Boolean =
+        (a1, a2) match {
+          case (DuplicateEvent, DuplicateEvent) => true
+          case (Rejected(s1), Rejected(s2))     => s1 === s2
+          case (_, _)                           => false
+        }
+    }
 }

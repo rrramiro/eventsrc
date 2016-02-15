@@ -56,6 +56,11 @@ trait EventStorage[F[_], K, S, E] { self =>
 }
 
 object EventStorage {
+  def maxBy[A, B: Order](f: A => B)(a1: A, a2: A): A =
+    if (f(a1) >= f(a2)) a1 else a2
+
+  // Not only a Semigroup but also a Band:
+  //     forall a. a |+| a = a
   implicit def eventStorageSemigroup[F[_]: Monad, K, S: Order, E]: Semigroup[EventStorage[F, K, S, E]] =
     new Semigroup[EventStorage[F, K, S, E]] {
       def append(primary: EventStorage[F, K, S, E], secondary: => EventStorage[F, K, S, E]): EventStorage[F, K, S, E] =
@@ -90,7 +95,7 @@ object EventStorage {
                 merge(fromSeq, left, None)
               // if both slots contain events, emit the earlier one.
               case (_, Some(leftE), Some(rightE)) =>
-                if (leftE <= rightE)
+                if (leftE.id.seq <= rightE.id.seq)
                   Process.emit(leftE).append(merge(Some(leftE.id.seq), None, right))
                 else
                   Process.emit(rightE).append(merge(Some(rightE.id.seq), left, None))
@@ -103,7 +108,7 @@ object EventStorage {
           }
 
           def latest(key: K): OptionT[F, Event[K, S, E]] =
-            (primary.latest(key) |@| secondary.latest(key))(_ max _)
+            (primary.latest(key) |@| secondary.latest(key))(maxBy[Event[K, S, E], S](_.id.seq))
 
           def put(event: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]] =
             primary.put(event)
