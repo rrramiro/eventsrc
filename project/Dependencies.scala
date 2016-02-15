@@ -4,7 +4,7 @@ import Keys._
 object Dependencies {
 
   object Version {
-    val scalaz        = "7.1.3"
+    val scalaz        = "7.1.4"
     val scalazStream  = "0.7.1a"
     val argonaut      = "6.1"
     val awsScala      = "4.0.0"
