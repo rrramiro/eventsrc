@@ -116,7 +116,7 @@ object TestEventStorage {
   def genGet[KK: Arbitrary, S: Order: Arbitrary, E: Arbitrary]: Gen[List[Event[KK, S, E]]] =
     for {
       list <- Gen.listOf(TestEvent.genEvent[KK, S, E])
-      sorted = list.sortBy(_.id.seq)(Order[S].toScalaOrdering)
+      sorted = EventStorageSpec.orderBy(list)(_.id.seq)
       unique = EventStorageSpec.nubBy(sorted)(_.id.seq === _.id.seq)
     } yield unique
 
@@ -163,6 +163,9 @@ object TestEventStorage {
 object EventStorageSpec {
   def nubBy[A](l: List[A])(f: (A, A) => Boolean): List[A] =
     l.foldRight(List.empty[A])((a, b) => a :: b.filter(!f(a, _)))
+
+  def orderBy[A, B: Order](xs: List[A])(f: A => B): List[A] =
+    xs.sorted(Order[B].contramap[A](f).toScalaOrdering)
 }
 
 class EventStorageSpec extends SpecificationWithJUnit with ScalaCheck {
@@ -200,16 +203,13 @@ class EventStorageSpec extends SpecificationWithJUnit with ScalaCheck {
   def latest[F[_], KK, S, E](key: KK)(es: EventStorage[F, KK, S, E]): OptionT[F, Event[KK, S, E]] =
     es.latest(key)
 
-  def orderBy[A, B: Order](xs: List[A])(f: A => B): List[A] =
-    xs.sorted(Order[B].contramap[A](f).toScalaOrdering)
-
   def getWithLists[KK: Equal: Arbitrary, S: Order: Arbitrary, E: Equal: Arbitrary] =
     Prop.forAll { (s1: TestEventStorage[KK, S, E], s2: TestEventStorage[KK, S, E], key: KK) =>
       val go = get[SafeCatchable, KK, S, E](key) _
       val xs = s1.underlyingGet ++ s2.underlyingGet
       val filtered = xs.filter(_.id.key === key)
       val unique = EventStorageSpec.nubBy(filtered)(_.id === _.id)
-      val sorted = orderBy(unique)((_: Event[KK, S, E]).id.seq)
+      val sorted = EventStorageSpec.orderBy(unique)((_: Event[KK, S, E]).id.seq)
 
       sorted must equal(go(s1.run |+| s2.run).get)
     }
@@ -218,7 +218,7 @@ class EventStorageSpec extends SpecificationWithJUnit with ScalaCheck {
     Prop.forAll { (s1: TestEventStorage[KK, S, E], s2: TestEventStorage[KK, S, E], key: KK) =>
       val go = get[SafeCatchable, KK, S, E](key) _
 
-      go(s1.run |+| s2.run).map(orderBy(_)((_: Event[KK, S, E]).id.seq)) must equal(go(s1.run |+| s2.run))
+      go(s1.run |+| s2.run).map(EventStorageSpec.orderBy(_)((_: Event[KK, S, E]).id.seq)) must equal(go(s1.run |+| s2.run))
     }
 
   def getNoDuplicates[KK: Equal: Arbitrary, S: Order: Arbitrary, E: Equal: Arbitrary] =
