@@ -2,7 +2,9 @@ package io.atlassian.event
 package stream
 package dynamo
 
-import argonaut._, Argonaut._
+import argonaut._
+import Argonaut._
+import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.stream.memory.MemorySingleSnapshotStorage
 import org.specs2.main.Arguments
@@ -71,7 +73,8 @@ object DynamoDirectoryEventStream {
   def eventStore(runner: DynamoDBAction ~> Task) =
     new DynamoEventStorage[Task, ColumnDirectoryId, ColumnTwoPartSequence, DirectoryEvent](
       schema,
-      runner
+      runner,
+      ReadConsistency.Eventual
     ).mapKS(
       ColumnDirectoryId.iso.from,
       ColumnDirectoryId.iso.to,
