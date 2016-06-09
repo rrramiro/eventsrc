@@ -1,5 +1,6 @@
 package io.atlassian.event.stream.dynamo
 
+import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.stream.{ Event, EventId, EventStorage, EventStreamError }
@@ -24,7 +25,8 @@ import DynamoDBAction._
  */
 class DynamoEventStorage[F[_], KK, S, E](
     tableDef: TableDefinition[KK, E, KK, S],
-    runAction: DynamoDBAction ~> F
+    runAction: DynamoDBAction ~> F,
+    queryConsistency: ReadConsistency
 )(
     implicit
     M: Monad[F],
@@ -58,7 +60,7 @@ class DynamoEventStorage[F[_], KK, S, E](
     import Process._
 
     def requestPage(q: table.Query): F[Page[table.R, EV]] =
-      interpret(table.query(q))
+      interpret(table.query(q.config(table.Query.Config(consistency = queryConsistency))))
 
     def loop(pt: F[Page[table.R, EV]]): Process[F, EV] =
       await(pt) { page =>
@@ -94,7 +96,7 @@ class DynamoEventStorage[F[_], KK, S, E](
     def runQuery[A](q: table.Query, f: Page[S, EV] => Option[A]) =
       OptionT(interpret(table.query(q).map(f)))
 
-    val config = table.Query.Config(direction = ScanDirection.Descending, limit = Some(1))
+    val config = table.Query.Config(direction = ScanDirection.Descending, limit = Some(1), consistency = queryConsistency)
     val hashQuery = table.Query.hash(key, config)
     runQuery(hashQuery, _.result.headOption)
   }

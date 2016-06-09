@@ -3,6 +3,7 @@ package stream
 package dynamo
 
 import io.atlassian.aws.WrappedInvalidException
+import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.stream.memory.MemorySingleSnapshotStorage
 import org.specs2.main.Arguments
@@ -61,7 +62,8 @@ object DynamoClientEventStream {
   def eventStore(runner: DynamoDBAction ~> Task) =
     new DynamoEventStorage(
       schema,
-      runner
+      runner,
+      ReadConsistency.Eventual
     ).mapKS(
       ColumnSingleStreamKey.iso.from,
       ColumnSingleStreamKey.iso.to,
