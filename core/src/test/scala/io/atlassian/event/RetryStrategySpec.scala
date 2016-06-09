@@ -26,7 +26,7 @@ class RetryStrategySpec extends SpecificationWithJUnit with ScalaCheck {
         counter.incrementAndGet()
       }
 
-    Retry(foo, RetryStrategy.durationList[Task](List.fill(retryCount.count)(Duration(1, "ms")), Delays.sleep), { (_: Int) => true }).run === retryCount.count + 1
+    Retry(foo, RetryStrategy.durationList[Task](List.fill(retryCount.count)(Duration(1, "ms")), Delays.sleep), { (_: Int) => true }).unsafePerformSync === retryCount.count + 1
   }
 
   def correctEvaluationCountRetryInterval = Prop.forAll { (retryCount: ReasonableParameters) =>
@@ -36,7 +36,7 @@ class RetryStrategySpec extends SpecificationWithJUnit with ScalaCheck {
         counter.incrementAndGet()
       }
 
-    Retry(foo, RetryStrategy.retryIntervals[Task](RetryInterval.fullJitter(retryCount.count, Duration(1, "ms"), 1.0), Delays.sleep), { (_: Int) => true }).run === retryCount.count + 1
+    Retry(foo, RetryStrategy.retryIntervals[Task](RetryInterval.fullJitter(retryCount.count, Duration(1, "ms"), 1.0), Delays.sleep), { (_: Int) => true }).unsafePerformSync === retryCount.count + 1
   }
 
   case class ReasonableParameters(count: Int)

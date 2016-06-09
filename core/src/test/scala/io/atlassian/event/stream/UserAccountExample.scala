@@ -144,6 +144,6 @@ object UserAccountExample {
         saved <- userById.get(CompanyUserId("abccom", "a"), QueryConsistency.LatestEvent)
       } yield saved
 
-    saveAndGetUser.run // Run it!
+    saveAndGetUser.unsafePerformSync // Run it!
   }
 }
