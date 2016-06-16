@@ -5,6 +5,7 @@ package dynamo
 import EventStreamError.DuplicateEvent
 import source.Transform
 import io.atlassian.aws.WrappedInvalidException
+import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb._
 import org.joda.time.{ DateTime, DateTimeZone }
 import org.junit.runner.RunWith
@@ -52,7 +53,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
 
   lazy val runner = TaskTransformation.runner(DYNAMO_CLIENT)
 
-  object DBEventStorage extends DynamoEventStorage[Task, KK, S, E](DynamoMappings.tableDefinition, runner)
+  object DBEventStorage extends DynamoEventStorage[Task, KK, S, E](DynamoMappings.tableDefinition, runner, ReadConsistency.Eventual)
 
   implicit val JodaDateTimeEqual: Equal[DateTime] =
     Equal.equalBy { _.withZone(DateTimeZone.UTC).toInstant.getMillis }
