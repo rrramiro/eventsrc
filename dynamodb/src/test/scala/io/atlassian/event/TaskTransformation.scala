@@ -11,7 +11,7 @@ object TaskTransformation {
   def runner(client: AmazonDynamoDB): DynamoDBAction ~> Task =
     new (DynamoDBAction ~> Task) {
       def apply[A](a: DynamoDBAction[A]): Task[A] =
-        new Task(a.run(client).run.value.map {
+        new Task(a.run.run(client).run.value.map {
           _.leftMap(WrappedInvalidException.orUnderlying)
         })
     }
