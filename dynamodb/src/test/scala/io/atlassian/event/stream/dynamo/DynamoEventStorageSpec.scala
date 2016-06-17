@@ -93,9 +93,9 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
       (1 to 150).foreach { i =>
         val eventId = EventId[KK, S](nonEmptyKey.unwrap, i.toLong)
         val event = Event[KK, S, E](eventId, DateTime.now, Transform.insert(valueToSave))
-        DBEventStorage.put(event).run
+        DBEventStorage.put(event).unsafePerformSync
       }
-      DBEventStorage.get(key, None).runFoldMap { _ => 1 }.attemptRun match {
+      DBEventStorage.get(key, None).runFoldMap { _ => 1 }.unsafePerformSyncAttempt match {
         case \/-(count) => count === 150
         case _          => ko
       }
@@ -112,16 +112,16 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
         case (s, i) =>
           val eventId = EventId[KK, S](nonEmptyKey.unwrap, i.toLong)
           val event = Event[KK, S, E](eventId, DateTime.now, Transform.insert(s))
-          DBEventStorage.put(event).run
+          DBEventStorage.put(event).unsafePerformSync
       }
 
       // Make sure we get the right number of events and the value is correct
       val r: Task[Int] = DBEventStorage.get(key, None).runFoldMap { _ => 1 }
       val last: Task[Option[String]] = DBEventStorage.get(key, None).runLast.map { _.flatMap { _.operation.value } }
-      (r.attemptRun match {
+      (r.unsafePerformSyncAttempt match {
         case \/-(eventCount) => eventCount === 3
         case _               => ko
-      }) and (last.attemptRun match {
+      }) and (last.unsafePerformSyncAttempt match {
         case \/-(saved) => saved === Some(v3)
         case _          => ko
       })
@@ -137,16 +137,16 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
         case (s, i) =>
           val eventId = EventId[KK, S](nonEmptyKey.unwrap, i.toLong)
           val event = Event[KK, S, E](eventId, DateTime.now, Transform.insert(s))
-          DBEventStorage.put(event).run
+          DBEventStorage.put(event).unsafePerformSync
       }
 
       // Make sure we get the right number of events and the value is correct
       val r: Task[Int] = DBEventStorage.get(key, Some(0)).runFoldMap { _ => 1 }
       val last: Task[List[String]] = DBEventStorage.get(key, Some(0)).runFoldMap { x => List(x.operation.value) }.map { _.flatten }
-      (r.attemptRun match {
+      (r.unsafePerformSyncAttempt match {
         case \/-(eventCount) => eventCount === 2
         case _               => ko
-      }) and (last.attemptRun match {
+      }) and (last.unsafePerformSyncAttempt match {
         case \/-(saved) => saved === List(v2, v3)
         case _          => ko
       })
@@ -156,7 +156,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
     Prop.forAll { (nonEmptyKey: UniqueString, value: String) =>
       val eventId = EventId.first[KK, S](nonEmptyKey.unwrap)
       val event: DBEventStorage.EV = Event[KK, S, E](eventId, DateTime.now, Transform.insert(value))
-      DBEventStorage.put(event).run
+      DBEventStorage.put(event).unsafePerformSync
       DynamoDB.get[DBEventStorage.EID, DBEventStorage.EV](eventId)(
         DynamoMappings.tableName,
         DBEventStorage.columns.eventId, DBEventStorage.columns.event
@@ -170,7 +170,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
       (for {
         _ <- DBEventStorage.put(event)
         result <- DBEventStorage.put(event)
-      } yield result).attemptRun match {
+      } yield result).unsafePerformSyncAttempt match {
         case \/-(-\/(e)) => e === DuplicateEvent
         case _           => ko
       }

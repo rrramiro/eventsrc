@@ -48,9 +48,9 @@ class DynamoSingleSnapshotStorageSpec(val arguments: Arguments) extends ScalaChe
   val DBSnapshotStorage = DBDefinition.snapshotStore
 
   def getNoSnapshot = Prop.forAll { (nonEmptyKey: UniqueString) =>
-    DBSnapshotStorage.get(nonEmptyKey.unwrap, SequenceQuery.latest).run.seq must beNone and
-      (DBSnapshotStorage.get(nonEmptyKey.unwrap, SequenceQuery.earliest).run.seq must beNone) and
-      (DBSnapshotStorage.get(nonEmptyKey.unwrap, SequenceQuery.before(1)).run.seq must beNone)
+    DBSnapshotStorage.get(nonEmptyKey.unwrap, SequenceQuery.latest).unsafePerformSync.seq must beNone and
+      (DBSnapshotStorage.get(nonEmptyKey.unwrap, SequenceQuery.earliest).unsafePerformSync.seq must beNone) and
+      (DBSnapshotStorage.get(nonEmptyKey.unwrap, SequenceQuery.before(1)).unsafePerformSync.seq must beNone)
   }
 
   def getWhatWasPut = Prop.forAll { (nonEmptyKey: UniqueString, v: String) =>
@@ -58,7 +58,7 @@ class DynamoSingleSnapshotStorageSpec(val arguments: Arguments) extends ScalaChe
     (for {
       _ <- DBSnapshotStorage.put(nonEmptyKey.unwrap, Snapshot.value[S, V](v)(1, DateTime.now), SnapshotStoreMode.Cache)
       saved <- DBSnapshotStorage.get(nonEmptyKey.unwrap, SequenceQuery.latest)
-    } yield (saved.value, saved.seq)).run === expected
+    } yield (saved.value, saved.seq)).unsafePerformSync === expected
   }
 
   def createTestTable() =

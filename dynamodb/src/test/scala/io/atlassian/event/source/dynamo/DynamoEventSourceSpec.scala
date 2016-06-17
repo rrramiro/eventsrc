@@ -75,9 +75,9 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
       val key = nonEmptyKey.unwrap
       val valueToSave = str
       (1 to 150).foreach { i =>
-        eventSourceApi.save(key, valueToSave.insertOp).run
+        eventSourceApi.save(key, valueToSave.insertOp).unsafePerformSync
       }
-      eventStore.get(key).runFoldMap { _ => 1 }.attemptRun match {
+      eventStore.get(key).runFoldMap { _ => 1 }.unsafePerformSyncAttempt match {
         case \/-(count) => count === 150
         case _          => ko
       }
@@ -93,14 +93,14 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
         _ <- eventSourceApi.save(key, v1.insertOp.ifAbsent)
         _ <- eventSourceApi.save(key, v2.insertOp)
         _ <- eventSourceApi.save(key, v3.insertOp)
-      } yield ()).run
+      } yield ()).unsafePerformSync
 
       // Make sure we get the right number of events and the value is correct
       val r: Task[Int] = eventStore.get(key).runFoldMap { _ => 1 }
-      (r.attemptRun match {
+      (r.unsafePerformSyncAttempt match {
         case \/-(eventCount) => eventCount === 3
         case _               => ko
-      }) and (eventSourceApi.get(key).attemptRun match {
+      }) and (eventSourceApi.get(key).unsafePerformSyncAttempt match {
         case \/-(saved) => saved === Some(v3)
         case _          => ko
       })
@@ -112,7 +112,7 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
       import scalaz.std.option._
       val eventId = EventId.first(nonEmptyKey.unwrap)
       val event = Event(eventId, DateTime.now, Transform.Insert(value))
-      eventStore.put(event).run
+      eventStore.put(event).unsafePerformSync
       DynamoDB.get[EventId, Event](eventId)(tableName, Columns.eventId, Columns.event) must returnValue(Some(event))
     }
 
@@ -123,7 +123,7 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
       (for {
         _ <- eventStore.put(event)
         result <- eventStore.put(event)
-      } yield result).attemptRun match {
+      } yield result).unsafePerformSyncAttempt match {
         case \/-(-\/(e)) => e === DuplicateEvent
         case _           => ko
       }

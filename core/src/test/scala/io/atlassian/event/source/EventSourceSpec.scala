@@ -37,7 +37,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       getResult <- get(1)
     } yield getResult
 
-    testResult.run === "fred".some
+    testResult.unsafePerformSync === "fred".some
   }
 
   def replayCommits = {
@@ -51,7 +51,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       get <- get(1)
     } yield get
 
-    lotsOfStuff.run === "wilma".some
+    lotsOfStuff.unsafePerformSync === "wilma".some
   }
 
   def insertIfAbsent = {
@@ -63,7 +63,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       _ <- save(1, "barney".insertOp.ifAbsent)
       get <- get(1)
     } yield get
-  }.run === "fred".some
+  }.unsafePerformSync === "fred".some
 
   def deleteIfAbsent = {
     val store = new MemoryEventSource
@@ -72,7 +72,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
     for {
       del <- save(1, deleteOp)
     } yield del
-  }.run === EventSource.Result.Noop()
+  }.unsafePerformSync === EventSource.Result.Noop()
 
   def conditionalInsertSuccess = {
     val store = new MemoryEventSource
@@ -83,7 +83,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       _ <- save(1, "barney".insertOp.ifEqual("fred"))
       get <- get(1)
     } yield get
-  }.run === "barney".some
+  }.unsafePerformSync === "barney".some
 
   def conditionalInsertFail = {
     val store = new MemoryEventSource
@@ -94,7 +94,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       _ <- save(1, "barney".insertOp.ifEqual("fred1"))
       get <- get(1)
     } yield get
-  }.run === "fred".some
+  }.unsafePerformSync === "fred".some
 
   def conditionalDeleteSuccess = {
     val store = new MemoryEventSource
@@ -105,7 +105,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       _ <- save(1, deleteOp.ifEqual("fred"))
       get <- get(1)
     } yield get
-  }.run === None
+  }.unsafePerformSync === None
 
   def conditionalDeleteFail = {
     val store = new MemoryEventSource
@@ -116,7 +116,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       _ <- save(1, deleteOp.ifEqual("fred1"))
       get <- get(1)
     } yield get
-  }.run === "fred".some
+  }.unsafePerformSync === "fred".some
 
   def replayToSequence = {
     val source = new MemoryEventSource
@@ -129,7 +129,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       get <- getAt(1, 1L)
     } yield get
 
-    lotsOfStuff.run === "barney".some
+    lotsOfStuff.unsafePerformSync === "barney".some
   }
 
   def storesDeletesCorrectly = {
@@ -145,7 +145,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
     } yield (val1, val2, val3)
 
     val expected = ("fred".some, None, "fred".some)
-    ops.run === expected
+    ops.unsafePerformSync === expected
   }
 
   def safeToDeleteNothing = {
@@ -156,7 +156,7 @@ class EventSourceSpec extends SpecificationWithJUnit {
       _ <- save(1, deleteOp)
       val1 <- get(1)
     } yield val1
-    ops.run === None
+    ops.unsafePerformSync === None
   }
 
   def history = {
@@ -171,8 +171,8 @@ class EventSourceSpec extends SpecificationWithJUnit {
       snapshot <- getHistory(1)
     } yield snapshot
     val getValue: store.Snapshot => Option[String] = _.value
-    val process: Process[Task, store.Snapshot] = lotsOfStuff.run
-    val list: List[store.Snapshot] = process.runLog.run.toList
+    val process: Process[Task, store.Snapshot] = lotsOfStuff.unsafePerformSync
+    val list: List[store.Snapshot] = process.runLog.unsafePerformSync.toList
     list.map(getValue) === List(Some("fred"), Some("barney"), None, Some("wilma"))
   }
 
