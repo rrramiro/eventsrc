@@ -7,26 +7,26 @@ import scalaz.syntax.equal._
 /**
  * A event is identified by the key and an incrementing sequence 'number'
  * @param key The key
- * @param sequence the sequence number
+ * @param seq the sequence number
  */
-case class EventId[KK, S](key: KK, seq: S)
+case class EventId[K, S](key: K, seq: S)
 
 object EventId {
-  def first[KK, S: Sequence](key: KK): EventId[KK, S] =
+  def first[K, S: Sequence](key: K): EventId[K, S] =
     EventId(key, Sequence[S].first)
 
-  def next[KK, S: Sequence](id: EventId[KK, S]): EventId[KK, S] =
+  def next[K, S: Sequence](id: EventId[K, S]): EventId[K, S] =
     id.copy(seq = Sequence[S].next(id.seq))
 
   implicit val EventIdBifunctor: Bifunctor[EventId] =
     new Bifunctor[EventId] {
-      def bimap[A, B, C, D](fab: EventId[A, B])(f: A => C, g: B => D) =
+      def bimap[K, S, KK, SS](fab: EventId[K, S])(f: K => KK, g: S => SS): EventId[KK, SS] =
         EventId(f(fab.key), g(fab.seq))
     }
 
-  implicit def EventIdEqual[A: Equal, B: Equal]: Equal[EventId[A, B]] =
-    new Equal[EventId[A, B]] {
-      def equal(a1: EventId[A, B], a2: EventId[A, B]): Boolean =
+  implicit def EventIdEqual[K: Equal, S: Equal]: Equal[EventId[K, S]] =
+    new Equal[EventId[K, S]] {
+      def equal(a1: EventId[K, S], a2: EventId[K, S]): Boolean =
         a1.key === a2.key && a1.seq === a2.seq
     }
 }

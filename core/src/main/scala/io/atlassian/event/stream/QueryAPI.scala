@@ -8,23 +8,6 @@ import scalaz.stream.{ process1, Process }
 import scalaz.syntax.all._
 import scalaz.syntax.std.option._
 
-sealed trait QueryConsistency {
-  import QueryConsistency._
-
-  def fold[X](snapshot: => X, event: => X): X =
-    this match {
-      case LatestSnapshot => snapshot
-      case LatestEvent    => event
-    }
-}
-object QueryConsistency {
-  case object LatestSnapshot extends QueryConsistency
-  case object LatestEvent extends QueryConsistency
-
-  val latestSnapshot: QueryConsistency = LatestSnapshot
-  val latestEvent: QueryConsistency = LatestEvent
-}
-
 case class LatestSnapshotResult[S, V](latest: Snapshot[S, V], previousPersisted: Snapshot[S, V])
 
 case class QueryAPI[F[_], KK, E, K, S, V](

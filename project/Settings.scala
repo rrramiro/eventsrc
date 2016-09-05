@@ -31,7 +31,6 @@ object Settings {
     wartRemoval ++
     scalariformSettings ++
     scalariformPrefs ++
-    net.virtualvoid.sbt.graph.Plugin.graphSettings ++ // dependency plugin settings 
     Seq[Def.Setting[_]] (
       organization := "io.atlassian"
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom

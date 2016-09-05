@@ -18,12 +18,12 @@ object Event {
   def next[KK, S: Sequence, E](key: KK, seq: Option[S], op: E): Event[KK, S, E] =
     Event(EventId(key, seq.map { Sequence[S].next }.getOrElse { Sequence[S].first }), DateTime.now, op)
 
-  def at[KK, S, E](e: Event[KK, S, E]): (S, DateTime) =
+  def at[K, S, E](e: Event[K, S, E]): (S, DateTime) =
     (e.id.seq, e.time)
 
-  implicit def eventEqual[KK: Equal, S: Equal, E: Equal]: Equal[Event[KK, S, E]] =
-    new Equal[Event[KK, S, E]] {
-      def equal(a1: Event[KK, S, E], a2: Event[KK, S, E]): Boolean =
+  implicit def eventEqual[K: Equal, S: Equal, E: Equal]: Equal[Event[K, S, E]] =
+    new Equal[Event[K, S, E]] {
+      def equal(a1: Event[K, S, E], a2: Event[K, S, E]): Boolean =
         a1.id === a2.id && a1.time == a2.time && a1.operation === a2.operation
     }
 

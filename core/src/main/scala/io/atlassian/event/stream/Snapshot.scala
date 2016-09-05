@@ -29,9 +29,7 @@ sealed trait Snapshot[S, V] {
 }
 
 object Snapshot {
-  /**
-   * There is no snapshot... i.e. no events have been saved.
-   */
+  /** There is no snapshot... i.e. no events have been saved. */
   case class NoSnapshot[S, V]() extends Snapshot[S, V] {
     val value = None
   }
