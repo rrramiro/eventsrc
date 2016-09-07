@@ -3,7 +3,7 @@ package stream
 
 import scala.concurrent.duration._
 import scalaz.effect.LiftIO
-import scalaz.{ Monad, \/-, -\/ }
+import scalaz.{ -\/, Contravariant, Monad, \/- }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
 
@@ -16,20 +16,44 @@ object SaveAPIConfig {
     ))
 }
 
-case class SaveAPI[F[_]: LiftIO, KK, E, K, S](toStreamKey: K => KK, store: EventStorage[F, KK, S, E]) {
-  def save(config: SaveAPIConfig[F])(key: K, operation: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
-    Retry[F, SaveResult[S]](doSave(key, operation), config.retry, _.fold(_ => false, _ => false, true))
+sealed trait SaveAPI[F[_], K, S, E] { self =>
+  def save(config: SaveAPIConfig[F])(key: K, operation: Operation[S, E]): F[SaveResult[S]]
 
-  private def doSave(key: K, operation: Operation[S, E])(retryCount: Int)(implicit M: Monad[F], T: Sequence[S]): F[SaveResult[S]] =
-    for {
-      seq <- store.latest(toStreamKey(key)).map { _.id.seq }.run
-      result <- operation.apply(seq).fold(
-        EventStreamError.reject(_).left[Event[KK, S, E]].point[F],
-        e => store.put(Event.next[KK, S, E](toStreamKey(key), seq, e))
-      )
-    } yield result match {
-      case -\/(EventStreamError.DuplicateEvent) => SaveResult.timedOut[S](retryCount)
-      case -\/(EventStreamError.Rejected(r))    => SaveResult.reject[S](r, retryCount)
-      case \/-(event)                           => SaveResult.success[S](event.id.seq, retryCount)
+  /** contramap on the key type */
+  def contramap[KK](f: KK => K): SaveAPI[F, KK, S, E]
+}
+
+object SaveAPI {
+  def apply[F[_]: LiftIO: Monad, K, S: Sequence, E](store: EventStorage[F, K, S, E]): SaveAPI[F, K, S, E] =
+    new Impl(identity, store)
+
+  implicit def SaveAPIContravariant[F[_], S, E]: Contravariant[SaveAPI[F, ?, S, E]] =
+    new Contravariant[SaveAPI[F, ?, S, E]] {
+      override def contramap[K, KK](api: SaveAPI[F, K, S, E])(f: KK => K): SaveAPI[F, KK, S, E] =
+        api.contramap(f)
     }
+
+  private[SaveAPI] class Impl[F[_]: LiftIO: Monad, K, S: Sequence, E, IK](
+      toStreamKey: K => IK,
+      store: EventStorage[F, IK, S, E]
+  ) extends SaveAPI[F, K, S, E] {
+    override def save(config: SaveAPIConfig[F])(key: K, operation: Operation[S, E]): F[SaveResult[S]] =
+      Retry[F, SaveResult[S]](doSave(key, operation), config.retry, _.fold(_ => false, _ => false, true))
+
+    def contramap[KK](f: KK => K): SaveAPI[F, KK, S, E] =
+      new Impl[F, KK, S, E, IK](f andThen toStreamKey, store)
+
+    private def doSave(key: K, operation: Operation[S, E])(retryCount: Int): F[SaveResult[S]] =
+      for {
+        seq <- store.latest(toStreamKey(key)).map { _.id.seq }.run
+        result <- operation.apply(seq).fold(
+          EventStreamError.reject(_).left[Event[IK, S, E]].point[F],
+          e => store.put(Event.next[IK, S, E](toStreamKey(key), seq, e))
+        )
+      } yield result match {
+        case -\/(EventStreamError.DuplicateEvent) => SaveResult.timedOut[S](retryCount)
+        case -\/(EventStreamError.Rejected(r))    => SaveResult.reject[S](r, retryCount)
+        case \/-(event)                           => SaveResult.success[S](event.id.seq, retryCount)
+      }
+  }
 }

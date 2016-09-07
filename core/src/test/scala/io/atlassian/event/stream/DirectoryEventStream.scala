@@ -104,7 +104,10 @@ object DirectoryEventStream {
       }
     }
 
-  def allUsersQueryAPI[E, S](eventStore: EventStorage[Task, DirectoryId, S, E], snapshotStore: SnapshotStorage[Task, DirectoryId, S, List[User]]) =
+  def allUsersQueryAPI[E, S](
+    eventStore: EventStorage[Task, DirectoryId, S, E],
+    snapshotStore: SnapshotStorage[Task, DirectoryId, S, List[User]]
+  )(implicit S: Sequence[S]): QueryAPI[Task, DirectoryId, S, E, List[User]] =
     QueryAPI[Task, DirectoryId, E, DirectoryId, S, List[User]](
       identity,
       eventStore,
@@ -112,14 +115,13 @@ object DirectoryEventStream {
       partialAllQuery
     )
 
-  def allUsersQueryAPIWithNoSnapshots[E, S](eventStore: EventStorage[Task, DirectoryId, S, E]): QueryAPI[Task, DirectoryId, E, DirectoryId, S, List[User]] =
+  def allUsersQueryAPIWithNoSnapshots[E, S](
+    eventStore: EventStorage[Task, DirectoryId, S, E]
+  )(implicit S: Sequence[S]): QueryAPI[Task, DirectoryId, S, E, List[User]] =
     allUsersQueryAPI(eventStore, SnapshotStorage.none)
 
-  def allUsersSaveAPI[KK, E, K, S, V](query: QueryAPI[Task, KK, E, K, S, V]) =
-    SaveAPI(
-      query.toStreamKey,
-      query.eventStore
-    )
+  def allUsersSaveAPI[K, S: Sequence, E](eventStore: EventStorage[Task, K, S, E]): SaveAPI[Task, K, S, E] =
+    SaveAPI[Task, K, S, E](eventStore)
 }
 
 import DirectoryEventStream.{ UserId, Username }
