@@ -43,13 +43,13 @@ trait EventStorage[F[_], K, S, E] { self =>
     // TODO: Monocle would clean this up a bit.
     new EventStorage[F, KK, SS, E] {
       val updateKey: Event[K, S, E] => Event[KK, SS, E] =
-        _.updateId { _.bimap(kk, ss) }
+        _.bimap(kk, ss)
 
       def get(key: KK, fromSeq: Option[SS]) =
         self.get(k(key), fromSeq.map{ s }).map { updateKey }
 
       def put(event: Event[KK, SS, E]) =
-        self.put(event.updateId { _.bimap(k, s) }).map { _.map { updateKey } }
+        self.put(event.bimap(k, s)).map { _.map { updateKey } }
 
       def latest(key: KK) =
         self.latest(k(key)).map { updateKey }

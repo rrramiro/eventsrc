@@ -1,18 +1,23 @@
 package io.atlassian.event
 package stream
 
+import monocle.PLens
+import monocle.macros.PLenses
 import org.joda.time.DateTime
 
 import scalaz.{ Equal, Functor, Ordering }
+import scalaz.syntax.bifunctor._
 import scalaz.syntax.equal._
 
 /**
  * Event wraps the event payload with common information (event id and time of the event)
  */
-case class Event[K, S, A](id: EventId[K, S], time: DateTime, operation: A) {
-  // TODO: Monocle
+@PLenses case class Event[K, S, A](id: EventId[K, S], time: DateTime, operation: A) {
   def updateId[KK, SS](f: EventId[K, S] => EventId[KK, SS]): Event[KK, SS, A] =
-    Event(f(id), time, operation)
+    Event.id.modify(f)(this)
+
+  def bimap[KK, SS](f: K => KK, g: S => SS) =
+    updateId { _.bimap[KK, SS](f, g) }
 }
 
 object Event {
@@ -31,7 +36,7 @@ object Event {
   implicit def EventFunctor[K, S]: Functor[Event[K, S, ?]] =
     new Functor[Event[K, S, ?]] {
       override def map[A, B](ev: Event[K, S, A])(f: A => B): Event[K, S, B] =
-        Event(ev.id, ev.time, f(ev.operation))
+        Event.operation[K, S, A, B].modify(f)(ev)
     }
 
   object syntax {

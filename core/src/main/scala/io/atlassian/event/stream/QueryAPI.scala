@@ -1,30 +1,42 @@
 package io.atlassian.event
 package stream
 
+import monocle.macros.PLenses
 import org.joda.time.DateTime
 
-import scalaz.{ Catchable, Contravariant, Monad, \/ }
+import scalaz.{ Catchable, Contravariant, Functor, Monad, \/ }
 import scalaz.stream.{ Process, process1 }
 import scalaz.syntax.all._
 import scalaz.syntax.std.option._
 
-case class LatestSnapshotResult[S, V](latest: Snapshot[S, V], previousPersisted: Snapshot[S, V])
+@PLenses case class LatestSnapshotResult[S, A](latest: Snapshot[S, A], previousPersisted: Snapshot[S, A]) {
+  def map[B](f: A => B): LatestSnapshotResult[S, B] =
+    LatestSnapshotResult(latest.map(f), previousPersisted.map(f))
+}
 
-sealed trait QueryAPI[F[_], K, S, E, V] {
+object LatestSnapshotResult {
+  implicit def LatestSnapshotResultFunctor[S]: Functor[LatestSnapshotResult[S, ?]] =
+    new Functor[LatestSnapshotResult[S, ?]] {
+      override def map[A, B](r: LatestSnapshotResult[S, A])(f: A => B): LatestSnapshotResult[S, B] =
+        r.map(f)
+    }
+}
+
+sealed trait QueryAPI[F[_], K, S, E, A] { self =>
   /**
    * @return the current view of the data for key 'key'
    */
-  def get(key: K, consistency: QueryConsistency): F[Option[V]]
+  def get(key: K, consistency: QueryConsistency): F[Option[A]]
 
   /**
    * @return the current view wrapped in Snapshot of the data for key 'key'
    */
-  def getSnapshot(key: K, consistency: QueryConsistency): F[Snapshot[S, V]]
+  def getSnapshot(key: K, consistency: QueryConsistency): F[Snapshot[S, A]]
 
   /**
    * Generates the latest snapshot by retrieving the last persisted snapshot and then replaying events on top of that.
    */
-  def generateLatestSnapshot(key: K): F[LatestSnapshotResult[S, V]]
+  def generateLatestSnapshot(key: K): F[LatestSnapshotResult[S, A]]
 
   /**
    * Return the view of the data for the key 'key' at the specified sequence number.
@@ -32,7 +44,7 @@ sealed trait QueryAPI[F[_], K, S, E, V] {
    * @param seq the sequence number of the event at which we want the see the view of the data.
    * @return view of the data at event with sequence 'seq'
    */
-  def getAt(key: K, seq: S): F[Option[V]]
+  def getAt(key: K, seq: S): F[Option[A]]
 
   /**
    * Get a stream of Snapshots starting from sequence number 'from' (if defined).
@@ -40,7 +52,7 @@ sealed trait QueryAPI[F[_], K, S, E, V] {
    * @param from Starting sequence number. None to get from the beginning of the stream.
    * @return a stream of Snapshots starting from sequence number 'from' (if defined).
    */
-  def getHistory(key: K, from: Option[S]): F[Process[F, Snapshot[S, V]]]
+  def getHistory(key: K, from: Option[S]): F[Process[F, Snapshot[S, A]]]
 
   /**
    * Return the view of the data for the key 'key' at the specified timestamp.
@@ -49,7 +61,7 @@ sealed trait QueryAPI[F[_], K, S, E, V] {
    * @param time The timestamp at which we want to see the view of the data
    * @return view of the data with events up to the given time stamp.
    */
-  def getAt(key: K, time: DateTime): F[Option[V]]
+  def getAt(key: K, time: DateTime): F[Option[A]]
 
   /**
    * Explicitly refresh persisted snapshot with events starting at `forceStartAt`. Normally to refresh a snapshot,
@@ -66,12 +78,42 @@ sealed trait QueryAPI[F[_], K, S, E, V] {
    *                     them!
    * @return Error when saving snapshot or the snapshot that was saved.
    */
-  def forceRefreshPersistedSnapshot(key: K, forceStartAt: S): F[SnapshotStorage.Error \/ Snapshot[S, V]]
+  def forceRefreshPersistedSnapshot(key: K, forceStartAt: S): F[SnapshotStorage.Error \/ Snapshot[S, A]]
 
   /**
    * contramap on the key.
    */
-  def contramap[KK](f: KK => K): QueryAPI[F, KK, S, E, V]
+  def contramap[KK](f: KK => K): QueryAPI[F, KK, S, E, A]
+
+  /**
+   * map on the value.
+   */
+  def map[B](f: A => B)(implicit F: Functor[F]): QueryAPI[F, K, S, E, B] =
+    new QueryAPI[F, K, S, E, B] {
+      def get(key: K, consistency: QueryConsistency): F[Option[B]] =
+        self.get(key, consistency).map { _.map(f) }
+
+      def getAt(key: K, time: DateTime): F[Option[B]] =
+        self.getAt(key, time).map { _.map(f) }
+
+      def getAt(key: K, seq: S): F[Option[B]] =
+        self.getAt(key, seq).map { _.map(f) }
+
+      def getHistory(key: K, from: Option[S]): F[Process[F, Snapshot[S, B]]] =
+        self.getHistory(key, from).map { _.map { _.map(f) } }
+
+      def getSnapshot(key: K, consistency: QueryConsistency): F[Snapshot[S, B]] =
+        self.getSnapshot(key, consistency).map { _.map(f) }
+
+      def forceRefreshPersistedSnapshot(key: K, forceStartAt: S): F[SnapshotStorage.Error \/ Snapshot[S, B]] =
+        self.forceRefreshPersistedSnapshot(key, forceStartAt).map { _.map { _.map(f) } }
+
+      def generateLatestSnapshot(key: K): F[LatestSnapshotResult[S, B]] =
+        self.generateLatestSnapshot(key).map { _.map(f) }
+
+      def contramap[KK](fk: KK => K): QueryAPI[F, KK, S, E, B] =
+        self.contramap(fk).map(f)
+    }
 }
 
 object QueryAPI {
@@ -83,6 +125,18 @@ object QueryAPI {
     acc: K => (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]
   )(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): QueryAPI[F, K, S, E, V] =
     new Impl(toStreamKey, eventStore, snapshotStore, acc)
+
+  implicit def QueryAPIContravariant[F[_], S, E, V]: Contravariant[QueryAPI[F, ?, S, E, V]] =
+    new Contravariant[QueryAPI[F, ?, S, E, V]] {
+      override def contramap[K, KK](r: QueryAPI[F, K, S, E, V])(f: KK => K): QueryAPI[F, KK, S, E, V] =
+        r.contramap(f)
+    }
+
+  implicit def QueryAPIFunctor[F[_]: Functor, K, S, E]: Functor[QueryAPI[F, K, S, E, ?]] =
+    new Functor[QueryAPI[F, K, S, E, ?]] {
+      override def map[A, B](r: QueryAPI[F, K, S, E, A])(f: A => B): QueryAPI[F, K, S, E, B] =
+        r.map(f)
+    }
 
   private[QueryAPI] class Impl[F[_], K, S, E, V, KK](
       toStreamKey: K => KK,
@@ -131,12 +185,6 @@ object QueryAPI {
     override def forceRefreshPersistedSnapshot(key: K, forceStartAt: S): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
       snapshotFold(Snapshot.zero, eventStore.get(toStreamKey(key), Some(forceStartAt)), acc(key)) >>= { persistSnapshot(key, _, None) }
 
-    def persistSnapshot(key: K, snapshot: Snapshot[S, V], previousSnapshot: Option[Snapshot[S, V]]): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
-      if (snapshot.seq != previousSnapshot.map { _.seq })
-        snapshotStore.put(key, snapshot, SnapshotStoreMode.Cache)
-      else
-        snapshot.right[SnapshotStorage.Error].point[F]
-
     override def contramap[A](f: A => K): QueryAPI[F, A, S, E, V] =
       new Impl[F, A, S, E, V, KK](
         f andThen toStreamKey,
@@ -144,6 +192,12 @@ object QueryAPI {
         snapshotStore.contramap(f),
         f andThen acc
       )
+
+    private def persistSnapshot(key: K, snapshot: Snapshot[S, V], previousSnapshot: Option[Snapshot[S, V]]): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
+      if (snapshot.seq != previousSnapshot.map { _.seq })
+        snapshotStore.put(key, snapshot, SnapshotStoreMode.Cache)
+      else
+        snapshot.right[SnapshotStorage.Error].point[F]
 
     private def generateSnapshotAt(key: K, at: Option[S]): F[Snapshot[S, V]] =
       for {
