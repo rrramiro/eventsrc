@@ -94,7 +94,7 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
 
       loop {
         requestPage {
-          fromSeq.fold {
+          fromSeq.filter(seq => implicitly[Sequence[S]].greaterThanOrEqual(seq, implicitly[Sequence[S]].first)).fold {
             table.Query.hash(key, table.Query.Config(consistency = config.queryConsistency))
           } {
             seq => table.Query.range(key, seq, Comparison.Gte, table.Query.Config(consistency = config.queryConsistency))
