@@ -2,7 +2,7 @@ package io.atlassian.event
 package stream
 
 import org.joda.time.DateTime
-import scalaz.{ Equal, Ordering }
+import scalaz.Equal
 import scalaz.syntax.equal._
 
 /**
