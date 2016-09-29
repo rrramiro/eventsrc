@@ -21,12 +21,12 @@ object Settings {
   //, "-Ywarn-all"  // Doesn't work with scala 2.11
   , "-Ywarn-dead-code" // N.B. doesn't work well with the ??? hole
   , "-Ywarn-numeric-widen"
-  , "-Ywarn-value-discard"     
+  , "-Ywarn-value-discard"
   , "-Xmax-classfile-name", "134"
   )
 
-  lazy val standardSettings = 
-    Defaults.coreDefaultSettings ++ 
+  lazy val standardSettings =
+    Defaults.coreDefaultSettings ++
     releaseSettings ++ // sbt-release
     wartRemoval ++
     scalariformSettings ++
@@ -35,11 +35,11 @@ object Settings {
       organization := "io.atlassian"
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom
     , scalaVersion := "2.11.8"
-    , crossScalaVersions  := Seq("2.11.8", "2.10.5")
+    , crossScalaVersions  := Seq("2.11.8", "2.10.6")
     , ReleaseKeys.crossBuild := true
     , autoScalaLibrary := false
     , ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
-    , scalacOptions ++= scalacFlags 
+    , scalacOptions ++= scalacFlags
     , javacOptions ++= Seq("-encoding", "UTF-8")
     , resolvers ++= Seq(
         Resolver.defaultLocal
@@ -62,14 +62,14 @@ object Settings {
 
   lazy val scalariformPrefs = {
     import scalariform.formatter.preferences._
-         
+
     Seq[Def.Setting[_]](
       ScalariformKeys.preferences := ScalariformKeys.preferences.value
         .setPreference(AlignArguments,                    false) // scalariform 0.1.4
         .setPreference(AlignParameters,                   false)
         .setPreference(AlignSingleLineCaseStatements,     true)
-        .setPreference(CompactControlReadability,         true)  
-        .setPreference(CompactStringConcatenation,        true)  
+        .setPreference(CompactControlReadability,         true)
+        .setPreference(CompactStringConcatenation,        true)
         .setPreference(DoubleIndentClassDeclaration,      true)
         .setPreference(PreserveSpaceBeforeArguments,      true)
         .setPreference(RewriteArrowSymbols,               false)
