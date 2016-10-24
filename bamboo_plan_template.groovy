@@ -55,7 +55,7 @@ export SBT_OPTS="-Dsbt.log.noformat=true -J-XX:MaxPermSize=512M -sbt-dir /opt/ba
 
 git remote set-url origin git@bitbucket.org:atlassianlabs/eventsrc.git
 git fetch origin -v
-git branch --set-upstream master origin/master
+git branch --set-upstream $bamboo_planRepository_branch origin/$bamboo_planRepository_branch
 
 ''')
 
