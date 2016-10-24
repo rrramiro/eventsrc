@@ -80,9 +80,12 @@ export SBT_OPTS="-Dsbt.log.noformat=true -J-XX:MaxPermSize=512M -sbt-dir /opt/ba
       }
    }
 
-   branchMonitoring(enabled:'true',timeOfInactivityInDays:'30',
-      notificationStrategy:'NOTIFY_COMMITTERS',remoteJiraBranchLinkingEnabled:'true')
-   
+   branchMonitoring() {
+      createBranch(matchingPattern:'.*')
+      inactiveBranchCleanup(periodInDays:'30')
+      deletedBranchCleanup(periodInDays:'30')
+   }
+
    dependencies(triggerOnlyAfterAllStagesGreen:'true',triggerForBranches:'true')
 }
 
