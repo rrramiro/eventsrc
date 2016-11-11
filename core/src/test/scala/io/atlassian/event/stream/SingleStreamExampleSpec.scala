@@ -37,14 +37,14 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
         eventStore <- getEventStore
         snapshotStore <- getSnapshotStore
         query = SingleStreamExample.clientEventStream(eventStore, snapshotStore)
-        save = DirectoryEventStream.allUsersSaveAPI(query)
+        save = DirectoryEventStream.allUsersSaveAPI(SaveAPI.Config.default, query)
       } yield f(query, save).set(minTestsOk = minTests)
     }
 
   val addAndGetClientById = mkTest { (q, s) =>
     Prop.forAll { (k: Client.Id, c: Client.Data) =>
       (for {
-        _ <- s.save(SaveAPIConfig.default)(k, ClientEvent.insert(k, c).op[TwoPartSequence[Long]])
+        _ <- s.save(k, ClientEvent.insert(k, c).op[TwoPartSequence[Long]])
         saved <- q.get(k, QueryConsistency.LatestEvent)
       } yield saved) must returnValue(beSome(c))
     }
@@ -53,8 +53,8 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
   val addAndDelete = mkTest { (q, s) =>
     Prop.forAll { (k: Client.Id, c: Client.Data) =>
       (for {
-        _ <- s.save(SaveAPIConfig.default)(k, ClientEvent.insert(k, c).op)
-        _ <- s.save(SaveAPIConfig.default)(k, ClientEvent.delete(k).op)
+        _ <- s.save(k, ClientEvent.insert(k, c).op)
+        _ <- s.save(k, ClientEvent.delete(k).op)
         saved <- q.get(k, QueryConsistency.LatestEvent)
       } yield saved) must returnValue(beNone)
     }
@@ -64,8 +64,8 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
     Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
       val expected = (Some(d1), Some(d2))
       (for {
-        _ <- s.save(SaveAPIConfig.default)(c1, Operation.insert(Insert(c1, d1)))
-        _ <- s.save(SaveAPIConfig.default)(c2, Operation.insert(Insert(c2, d2)))
+        _ <- s.save(c1, Operation.insert(Insert(c1, d1)))
+        _ <- s.save(c2, Operation.insert(Insert(c2, d2)))
         read1 <- q.get(c1, QueryConsistency.LatestEvent)
         read2 <- q.get(c2, QueryConsistency.LatestEvent)
       } yield (read1, read2)) must returnValue(expected)
@@ -76,13 +76,13 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
     Prop.forAll { (c1: Client.Id, d1: Client.Data, c2: Client.Id, d2: Client.Data) =>
       val expected = (Some(d1), None, Some(d2), None)
       (for {
-        _ <- s.save(SaveAPIConfig.default)(c1, Operation.insert(Insert(c1, d1)))
+        _ <- s.save(c1, Operation.insert(Insert(c1, d1)))
         v1 <- q.get(c1, QueryConsistency.LatestEvent)
-        _ <- s.save(SaveAPIConfig.default)(c1, Operation.insert(Delete(c1)))
+        _ <- s.save(c1, Operation.insert(Delete(c1)))
         v2 <- q.get(c1, QueryConsistency.LatestEvent)
-        _ <- s.save(SaveAPIConfig.default)(c2, Operation.insert(Insert(c2, d2)))
+        _ <- s.save(c2, Operation.insert(Insert(c2, d2)))
         v3 <- q.get(c2, QueryConsistency.LatestEvent)
-        _ <- s.save(SaveAPIConfig.default)(c2, Operation.insert(Delete(c2)))
+        _ <- s.save(c2, Operation.insert(Delete(c2)))
         v4 <- q.get(c2, QueryConsistency.LatestEvent)
       } yield (v1, v2, v3, v4)) must returnValue(expected)
     }

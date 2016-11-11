@@ -112,13 +112,13 @@ object UserAccountExample {
   object DataAccess {
     def apply[F[_]: Monad: LiftIO, KK](queryAPI: QueryAPI[F, KK, UserAccountEvent, CompanyUsername, Long, User]): DataAccess[F] =
       new DataAccess[F] {
-        lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long](queryAPI.toStreamKey, queryAPI.eventStore)
+        lazy val saveAPI = SaveAPI[F, KK, UserAccountEvent, CompanyUsername, Long](SaveAPI.Config.default, queryAPI.toStreamKey, queryAPI.eventStore)
         def saveUser(u: User): F[SaveResult[Long]] = {
           val event = InsertUser(u.id.userId, u.name, u.username)
           val operation = Operation[Long, UserAccountEvent] { _ =>
             Operation.Result.success(event)
           }
-          saveAPI.save(SaveAPIConfig.default)(CompanyUsername(u.id.companyId, u.username), operation)
+          saveAPI.save(CompanyUsername(u.id.companyId, u.username), operation)
         }
       }
   }

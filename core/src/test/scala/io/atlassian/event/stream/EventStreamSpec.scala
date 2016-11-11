@@ -22,9 +22,9 @@ class EventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
 
   def saveAPIRetries = Prop.forAll { (k: DirectoryId, u1: User) =>
     val api = DirectoryEventStream.allUsersQueryAPIWithNoSnapshots(AlwaysFailingDirectoryEventStream.eventStore)
-    val saveApi = DirectoryEventStream.allUsersSaveAPI(api)
+    val saveApi = DirectoryEventStream.allUsersSaveAPI(SaveAPI.Config.default, api)
 
-    saveApi.save(SaveAPIConfig.default)(k, Operation.insert(DirectoryEvent.addUser(u1))).run.fold(
+    saveApi.save(k, Operation.insert(DirectoryEvent.addUser(u1))).run.fold(
       { _ => failure }, // Fail if we somehow succeeded
       { _ => failure },
       { success }
