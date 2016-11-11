@@ -1,7 +1,6 @@
 package io.atlassian.event
 package stream
 
-import monocle.PLens
 import monocle.macros.PLenses
 import org.joda.time.DateTime
 

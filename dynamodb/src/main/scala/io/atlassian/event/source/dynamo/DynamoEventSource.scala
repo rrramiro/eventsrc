@@ -10,6 +10,7 @@ import org.joda.time.DateTime
 import scalaz.{ Catchable, Monad, \/, ~> }
 import scalaz.stream.Process
 import scalaz.syntax.either._
+import scalaz.syntax.order._
 import DynamoDBAction._
 
 trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
@@ -94,10 +95,11 @@ trait DynamoEventSource[KK, VV, S] extends EventSource[KK, VV, S] {
 
       loop {
         requestPage {
-          fromSeq.fold {
-            table.Query.hash(key, table.Query.Config(consistency = config.queryConsistency))
+          val consistency = table.Query.Config(consistency = config.queryConsistency)
+          fromSeq.filter(_ >= S.first).fold {
+            table.Query.hash(key, consistency)
           } {
-            seq => table.Query.range(key, seq, Comparison.Gte, table.Query.Config(consistency = config.queryConsistency))
+            seq => table.Query.range(key, seq, Comparison.Gte, consistency)
           }
         }
       }
