@@ -1,11 +1,12 @@
 package io.atlassian.event
 package stream
 
-import argonaut._, Argonaut._
+import argonaut._
+import Argonaut._
 import org.scalacheck.Arbitrary._
-import org.scalacheck.{ Gen, Arbitrary }
+import org.scalacheck.{ Arbitrary, Gen }
 
-import scalaz.{ \/, NaturalTransformation }
+import scalaz.\/
 import scalaz.concurrent.Task
 import scalaz.syntax.either._
 import scalaz.syntax.std.option._
@@ -32,7 +33,6 @@ object DirectoryEventStream {
   type DirectoryUsernamePrefix = (DirectoryId, String)
 
   object ops {
-    import scalaz.syntax.std.option._
     import Operation.syntax._
 
     def addUser(u: User): Operation[TwoPartSequence[Long], DirectoryEvent] =
@@ -115,11 +115,8 @@ object DirectoryEventStream {
   def allUsersQueryAPIWithNoSnapshots[E, S](eventStore: EventStorage[Task, DirectoryId, S, E]): QueryAPI[Task, DirectoryId, E, DirectoryId, S, List[User]] =
     allUsersQueryAPI(eventStore, SnapshotStorage.none)
 
-  def allUsersSaveAPI[KK, E, K, S, V](query: QueryAPI[Task, KK, E, K, S, V]) =
-    SaveAPI(
-      query.toStreamKey,
-      query.eventStore
-    )
+  def allUsersSaveAPI[KK, E, K, S, V](config: SaveAPIConfig[Task], query: QueryAPI[Task, KK, E, K, S, V]) =
+    SaveAPI(config, query.toStreamKey, query.eventStore)
 }
 
 import DirectoryEventStream.{ UserId, Username }
