@@ -115,7 +115,7 @@ object DirectoryEventStream {
   def allUsersQueryAPIWithNoSnapshots[E, S](eventStore: EventStorage[Task, DirectoryId, S, E]): QueryAPI[Task, DirectoryId, E, DirectoryId, S, List[User]] =
     allUsersQueryAPI(eventStore, SnapshotStorage.none)
 
-  def allUsersSaveAPI[KK, E, K, S, V](config: SaveAPIConfig[Task], query: QueryAPI[Task, KK, E, K, S, V]) =
+  def allUsersSaveAPI[KK, E, K, S, V](config: SaveAPI.Config[Task], query: QueryAPI[Task, KK, E, K, S, V]) =
     SaveAPI(config, query.toStreamKey, query.eventStore)
 }
 

@@ -37,7 +37,7 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
         eventStore <- getEventStore
         snapshotStore <- getSnapshotStore
         query = SingleStreamExample.clientEventStream(eventStore, snapshotStore)
-        save = DirectoryEventStream.allUsersSaveAPI(SaveAPIConfig.default, query)
+        save = DirectoryEventStream.allUsersSaveAPI(SaveAPI.Config.default, query)
       } yield f(query, save).set(minTestsOk = minTests)
     }
 
