@@ -10,7 +10,9 @@ import scalaz.std.option._
  * to an aggregate type.
  * @param apply Function from a sequence to an operation that should occur (i.e. should we save the event or reject it)
  */
-case class Operation[S, E](apply: Option[S] => Operation.Result[E])
+case class Operation[S, E](run: Option[S] => Operation.Result[E]) {
+  def apply(op: Option[S]): Operation.Result[E] = run(op)
+}
 
 object Operation {
   def insert[S, E](e: E): Operation[S, E] =

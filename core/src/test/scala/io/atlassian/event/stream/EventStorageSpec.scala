@@ -6,79 +6,14 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{ Arbitrary, Gen, Prop }
 import org.specs2.matcher.{ BeTypedEqualTo, Matcher }
 import org.specs2.{ ScalaCheck, SpecificationWithJUnit }
-import scalaz._
+
+import scalaz.{ Applicative, Catchable, Equal, Monad, Monoid, NonEmptyList, OptionT, Order, Traverse, \/ }
 import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.std.option._
 import scalaz.std.string._
+import scalaz.syntax.all._
 import scalaz.stream.Process
-import scalaz.syntax.either._
-import scalaz.syntax.monadPlus._
-import scalaz.syntax.monoid._
-import scalaz.syntax.order._
-
-sealed trait SafeCatchable[A] {
-  def toOption: Option[A]
-  def get(implicit M: Monoid[A]): A
-}
-
-case class CatchableSuccess[A](value: A) extends SafeCatchable[A] {
-  def toOption: Option[A] =
-    Some(value)
-
-  def get(implicit M: Monoid[A]): A =
-    value
-}
-
-case class CatchableFailure[A]() extends SafeCatchable[A] {
-  def toOption: Option[A] =
-    None
-
-  def get(implicit M: Monoid[A]): A =
-    mzero[A]
-}
-
-object SafeCatchable {
-  implicit val safeCatchableMonadPlus: MonadPlus[SafeCatchable] =
-    new MonadPlus[SafeCatchable] {
-      def point[A](a: => A): SafeCatchable[A] =
-        CatchableSuccess(a)
-
-      def bind[A, B](fa: SafeCatchable[A])(f: A => SafeCatchable[B]): SafeCatchable[B] =
-        fa match {
-          case CatchableSuccess(value) => f(value)
-          case CatchableFailure()      => CatchableFailure()
-        }
-
-      def empty[A]: SafeCatchable[A] =
-        CatchableFailure[A]()
-
-      def plus[A](a: SafeCatchable[A], b: => SafeCatchable[A]): SafeCatchable[A] =
-        a match {
-          case CatchableSuccess(value) => CatchableSuccess(value)
-          case CatchableFailure()      => b
-        }
-    }
-
-  implicit val safeCatchableCatchable: Catchable[SafeCatchable] =
-    new Catchable[SafeCatchable] {
-      def attempt[A](f: SafeCatchable[A]): SafeCatchable[Throwable \/ A] =
-        f.map(_.right)
-
-      def fail[A](err: Throwable): SafeCatchable[A] =
-        mempty[SafeCatchable, A]
-    }
-
-  implicit def safeCatchableEqual[A: Equal]: Equal[SafeCatchable[A]] =
-    new Equal[SafeCatchable[A]] {
-      def equal(a1: SafeCatchable[A], a2: SafeCatchable[A]) =
-        (a1, a2) match {
-          case (CatchableSuccess(v1), CatchableSuccess(v2)) => v1 === v2
-          case (CatchableFailure(), CatchableFailure())     => true
-          case (_, _)                                       => false
-        }
-    }
-}
 
 case class TestEvent[KK, S, E](event: Event[KK, S, E])
 
@@ -122,19 +57,19 @@ object TestEventStorage {
 
   def genPut[KK: Arbitrary, S: Arbitrary, E: Arbitrary]: Gen[SafeCatchable[EventStreamError \/ Event[KK, S, E]]] =
     Gen.frequency[SafeCatchable[EventStreamError \/ Event[KK, S, E]]](
-      1 -> CatchableFailure[EventStreamError \/ Event[KK, S, E]](),
+      1 -> SafeCatchable.failure[EventStreamError \/ Event[KK, S, E]],
       20 -> Gen.frequency[EventStreamError \/ Event[KK, S, E]](
         1 -> genEventStreamError.map(_.left),
         20 -> TestEvent.genEvent[KK, S, E].map(_.right)
-      ).map(CatchableSuccess.apply)
+      ).map(SafeCatchable.success)
     )
 
   def genLatest[KK: Arbitrary, S: Arbitrary, E: Arbitrary]: Gen[OptionT[SafeCatchable, Event[KK, S, E]]] =
     Gen.frequency(
       1 -> OptionT.none[SafeCatchable, Event[KK, S, E]],
       20 -> Gen.frequency[SafeCatchable[Event[KK, S, E]]](
-        1 -> CatchableFailure[Event[KK, S, E]](),
-        20 -> TestEvent.genEvent[KK, S, E].map(CatchableSuccess[Event[KK, S, E]])
+        1 -> SafeCatchable.failure[Event[KK, S, E]],
+        20 -> TestEvent.genEvent[KK, S, E].map(SafeCatchable.success)
       ).map(_.liftM[OptionT])
     )
 
@@ -147,13 +82,16 @@ object TestEventStorage {
       } yield TestEventStorage(
         g,
         new EventStorage[SafeCatchable, KK, S, E] {
-          def get(key: KK, fromSeq: Option[S]): Process[SafeCatchable, Event[KK, S, E]] =
+          override def get(key: KK, fromSeq: Option[S]): Process[SafeCatchable, Event[KK, S, E]] =
             Process.emitAll(g.filter(_.id.key === key))
 
-          def put(event: Event[KK, S, E]): SafeCatchable[EventStreamError \/ Event[KK, S, E]] =
+          override def put(event: Event[KK, S, E]): SafeCatchable[EventStreamError \/ Event[KK, S, E]] =
             p
 
-          def latest(key: KK): OptionT[SafeCatchable, Event[KK, S, E]] =
+          override def batchPut[G[_]: Traverse](events: G[Event[KK, S, E]]): SafeCatchable[EventStreamError \/ G[Event[KK, S, E]]] =
+            events.map(put).sequenceU.map { _.sequenceU }
+
+          override def latest(key: KK): OptionT[SafeCatchable, Event[KK, S, E]] =
             l
         }
       )
