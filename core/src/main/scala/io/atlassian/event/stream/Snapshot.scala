@@ -10,29 +10,34 @@ import scalaz.\/
  *
  * The event Id is quite a useful thing in addition to the value of the snapshot.
  *
- * @tparam V The type of the value wrapped by the Snapshot
+ * @tparam A The type of the value wrapped by the Snapshot
  */
-sealed trait Snapshot[S, V] {
+sealed trait Snapshot[S, A] {
   import Snapshot._
 
-  def value: Option[V]
+  def value: Option[A]
 
   def seq: Option[S] =
     this.fold(None, { case (_, seq, _) => Some(seq) }, { case (seq, _) => Some(seq) })
 
-  def fold[X](none: => X, value: (V, S, DateTime) => X, deleted: (S, DateTime) => X): X =
+  def fold[X](none: => X, value: (A, S, DateTime) => X, deleted: (S, DateTime) => X): X =
     this match {
       case NoSnapshot()        => none
       case Value(v, seq, time) => value(v, seq, time)
       case Deleted(seq, time)  => deleted(seq, time)
     }
+
+  def map[B](f: A => B): Snapshot[S, B] =
+    fold[Snapshot[S, B]](
+      zero,
+      { case (a, s, d) => Value(f(a), s, d) },
+      { case (s, d) => deleted[S, B](s, d) }
+    )
 }
 
 object Snapshot {
-  /**
-   * There is no snapshot... i.e. no events have been saved.
-   */
-  case class NoSnapshot[S, V]() extends Snapshot[S, V] {
+  /** There is no snapshot... i.e. no events have been saved. */
+  case class NoSnapshot[S, A]() extends Snapshot[S, A] {
     val value = None
   }
 
@@ -41,7 +46,7 @@ object Snapshot {
    * @param view The value
    * @param s Represents the point in the stream that this Snapshot is for
    */
-  case class Value[S, V](view: V, s: S, time: DateTime) extends Snapshot[S, V] {
+  case class Value[S, A](view: A, s: S, time: DateTime) extends Snapshot[S, A] {
     val value = Some(view)
   }
 
@@ -49,25 +54,25 @@ object Snapshot {
    * Events have been saved and there is no value (i.e. the value has been deleted).
    * @param s Represents the point in the stream
    */
-  case class Deleted[S, V](s: S, time: DateTime) extends Snapshot[S, V] {
+  case class Deleted[S, A](s: S, time: DateTime) extends Snapshot[S, A] {
     val value = None
   }
 
-  def zero[S, V]: Snapshot[S, V] =
-    NoSnapshot[S, V]()
+  def zero[S, A]: Snapshot[S, A] =
+    NoSnapshot[S, A]()
 
-  def value[S, V](view: V): (S, DateTime) => Snapshot[S, V] =
+  def value[S, A](view: A): (S, DateTime) => Snapshot[S, A] =
     (seq: S, time: DateTime) => Value(view, seq, time)
 
-  def deleted[S, V]: (S, DateTime) => Snapshot[S, V] =
+  def deleted[S, A]: (S, DateTime) => Snapshot[S, A] =
     (seq: S, time: DateTime) => Deleted(seq, time)
 
-  def noop[K, S, V](old: Snapshot[S, V]): (S, DateTime) => Snapshot[S, V] =
+  def noop[K, S, A](old: Snapshot[S, A]): (S, DateTime) => Snapshot[S, A] =
     (seq: S, time: DateTime) =>
       old.fold(
-        deleted[S, V],
-        { case (v, _, _) => value[S, V](v) },
-        { case (_, _) => deleted[S, V] }
+        deleted[S, A],
+        { case (v, _, _) => value[S, A](v) },
+        { case (_, _) => deleted[S, A] }
       )(seq, time)
 }
 

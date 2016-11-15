@@ -1,7 +1,7 @@
 package io.atlassian.event
 package stream
 
-import scalaz.{ \/, Functor, Monad, OptionT, Order, Semigroup }
+import scalaz.{ Functor, InvariantFunctor, Monad, OptionT, Order, Semigroup, \/ }
 import scalaz.stream.{ Process, Tee, tee }
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.applicative._
@@ -42,16 +42,17 @@ trait EventStorage[F[_], K, S, E] { self =>
   def mapKS[KK, SS](k: KK => K, kk: K => KK, s: SS => S, ss: S => SS)(implicit F: Functor[F]) =
     // TODO: Monocle would clean this up a bit.
     new EventStorage[F, KK, SS, E] {
-      def updateKey(event: Event[K, S, E]) =
-        event.updateId(_.bimap(kk, ss))
+      val updateKey: Event[K, S, E] => Event[KK, SS, E] =
+        _.bimap(kk, ss)
 
       def get(key: KK, fromSeq: Option[SS]) =
-        self.get(k(key), fromSeq.map(s)).map(updateKey)
+        self.get(k(key), fromSeq.map{ s }).map { updateKey }
 
       def put(event: Event[KK, SS, E]) =
-        self.put(event.updateId(_.bimap(k, s))).map(_.map(updateKey))
+        self.put(event.bimap(k, s)).map { _.map { updateKey } }
 
-      def latest(key: KK) = self.latest(k(key)).map(updateKey)
+      def latest(key: KK) =
+        self.latest(k(key)).map { updateKey }
     }
 }
 
@@ -59,9 +60,15 @@ object EventStorage {
   def maxBy[A, B: Order](f: A => B)(a1: A, a2: A): A =
     if (f(a1) >= f(a2)) a1 else a2
 
+  def EventStorageKeyInvariantFunctor[F[_]: Functor, S, E]: InvariantFunctor[EventStorage[F, ?, S, E]] =
+    new InvariantFunctor[EventStorage[F, ?, S, E]] {
+      override def xmap[K, KK](ma: EventStorage[F, K, S, E], f: K => KK, g: KK => K): EventStorage[F, KK, S, E] =
+        ma.mapKS[KK, S](g, f, identity, identity)
+    }
+
   // Not only a Semigroup but also a Band:
   //     forall a. a |+| a = a
-  implicit def eventStorageSemigroup[F[_]: Monad, K, S: Order, E]: Semigroup[EventStorage[F, K, S, E]] =
+  implicit def EventStorageSemigroup[F[_]: Monad, K, S: Order, E]: Semigroup[EventStorage[F, K, S, E]] =
     new Semigroup[EventStorage[F, K, S, E]] {
       def append(primary: EventStorage[F, K, S, E], secondary: => EventStorage[F, K, S, E]): EventStorage[F, K, S, E] =
         new EventStorage[F, K, S, E] {

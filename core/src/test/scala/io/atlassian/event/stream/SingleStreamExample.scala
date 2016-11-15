@@ -4,7 +4,7 @@ package stream
 import org.scalacheck.{ Gen, Arbitrary }
 import Arbitrary.arbitrary
 
-import scalaz.{ NaturalTransformation, @@ }
+import scalaz.@@
 import Event.syntax._
 import scalaz.concurrent.Task
 import scalaz.std.option._
@@ -15,7 +15,8 @@ object SingleStreamExample {
   type ZoneId = Long
   type SingleStreamKey = String @@ SingleStreamKey.Marker
   object SingleStreamKey extends Tagger[String] {
-    val VAL = apply("1")
+    val VAL: SingleStreamKey = apply("1")
+    def toVal[A]: A => SingleStreamKey = _ => VAL
   }
 
   sealed trait ClientEvent
@@ -77,15 +78,15 @@ object SingleStreamExample {
       }
     }
 
-  def clientEventStream[K](
-    eventStore: EventStorage[Task, SingleStreamKey, K, ClientEvent],
-    snapshotStore: SnapshotStorage[Task, Client.Id, K, Client.Data]
-  ) =
-    QueryAPI[Task, SingleStreamKey, ClientEvent, Client.Id, K, Client.Data](
-      _ => SingleStreamKey.VAL,
+  def clientEventStream[S: Sequence](
+    eventStore: EventStorage[Task, SingleStreamKey, S, ClientEvent],
+    snapshotStore: SnapshotStorage[Task, Client.Id, S, Client.Data]
+  ): QueryAPI[Task, Client.Id, S, ClientEvent, Client.Data] =
+    QueryAPI[Task, SingleStreamKey, ClientEvent, Client.Id, S, Client.Data](
+      SingleStreamKey.toVal,
       eventStore,
       snapshotStore,
-      (key: Client.Id) => (s: Snapshot[K, Client.Data], e: Event[SingleStreamKey, K, ClientEvent]) => e.process(s) { ov =>
+      (key: Client.Id) => (s: Snapshot[S, Client.Data], e: Event[SingleStreamKey, S, ClientEvent]) => e.process(s) { ov =>
         {
           case Insert(k, v) if key == k =>
             v.some
@@ -94,11 +95,4 @@ object SingleStreamExample {
         }
       }
     )
-
-  def saveAPI[KK, E, K, S, V](query: QueryAPI[Task, KK, E, K, S, V]) =
-    SaveAPI(
-      query.toStreamKey,
-      query.eventStore
-    )
-
 }

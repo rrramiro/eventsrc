@@ -6,6 +6,7 @@ object Dependencies {
   object Version {
     val scalaz        = "7.2.3"
     val scalazStream  = "0.8"
+    val monocle       = "1.2.2"
     val argonaut      = "6.1a"
     val awsScala      = "7.0.0"
     val kadai         = "5.0.0"
@@ -22,6 +23,15 @@ object Dependencies {
     , "org.scalaz"               %% "scalaz-effect"     % Version.scalaz
     , "org.scalaz"               %% "scalaz-concurrent" % Version.scalaz
     , "org.scalaz.stream"        %% "scalaz-stream"     % Version.scalazStream
+    )
+
+  lazy val monocle =
+    Seq(
+      "com.github.julien-truffaut"  %%  "monocle-core"    % Version.monocle,
+      "com.github.julien-truffaut"  %%  "monocle-generic" % Version.monocle,
+      "com.github.julien-truffaut"  %%  "monocle-macro"   % Version.monocle,
+      "com.github.julien-truffaut"  %%  "monocle-state"   % Version.monocle,
+      "com.github.julien-truffaut"  %%  "monocle-law"     % Version.monocle % "test"
     )
 
   lazy val log4j =
@@ -47,7 +57,7 @@ object Dependencies {
     , "junit"               %  "junit"                % Version.junit       % "test"
     )
 
-  lazy val common = scalaz ++ kadai ++ test
+  lazy val common = scalaz ++ monocle ++ kadai ++ test
 
   lazy val dynamodb =
     Seq(

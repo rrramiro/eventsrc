@@ -22,8 +22,9 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
          Delete multiple      ${deleteClients(NUM_TESTS)}
     """
 
-  type Q = QueryAPI[Task, SingleStreamKey, ClientEvent, Client.Id, TwoPartSequence[Long], Client.Data]
-  type S = SaveAPI[Task, SingleStreamKey, ClientEvent, Client.Id, TwoPartSequence[Long]]
+  //[Task, Client.Id, S, ClientEvent, Client.Data]
+  type Q = QueryAPI[Task, Client.Id, TwoPartSequence[Long], ClientEvent, Client.Data]
+  type S = SaveAPI[Task, Client.Id, TwoPartSequence[Long], ClientEvent]
 
   type ES = EventStorage[Task, SingleStreamKey, TwoPartSequence[Long], ClientEvent]
   type SS = SnapshotStorage[Task, Client.Id, TwoPartSequence[Long], Client.Data]
@@ -36,8 +37,8 @@ abstract class SingleStreamExampleSpec extends ScalaCheckSpec {
       for {
         eventStore <- getEventStore
         snapshotStore <- getSnapshotStore
-        query = SingleStreamExample.clientEventStream(eventStore, snapshotStore)
-        save = DirectoryEventStream.allUsersSaveAPI(query)
+        query = SingleStreamExample.clientEventStream[TwoPartSequence[Long]](eventStore, snapshotStore)
+        save: S = DirectoryEventStream.allUsersSaveAPI(eventStore).contramap(SingleStreamKey.toVal)
       } yield f(query, save).set(minTestsOk = minTests)
     }
 

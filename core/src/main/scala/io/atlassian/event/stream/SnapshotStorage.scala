@@ -3,7 +3,7 @@ package stream
 
 import kadai.Invalid
 
-import scalaz.{ Applicative, \/ }
+import scalaz.{ Applicative, Contravariant, \/ }
 import scalaz.syntax.either._
 import scalaz.syntax.applicative._
 
@@ -14,7 +14,7 @@ import scalaz.syntax.applicative._
  * @tparam K The type of the key for snapshots. This does not need to be the same as for the event stream itself.
  * @tparam V The type of the value wrapped by Snapshots that this store persists.
  */
-trait SnapshotStorage[F[_], K, S, V] {
+trait SnapshotStorage[F[_], K, S, V] { self =>
   /**
    * Retrieve a snapshot before the given sequence number. We typically specify a sequence number if we want to get
    * some old snapshot i.e. the latest persisted snapshot may have been generated after the point in time that we're
@@ -34,6 +34,18 @@ trait SnapshotStorage[F[_], K, S, V] {
    * @return Either a Throwable (for error) or the saved snapshot.
    */
   def put(snapshotKey: K, snapshot: Snapshot[S, V], mode: SnapshotStoreMode): F[SnapshotStorage.Error \/ Snapshot[S, V]]
+
+  /**
+   * contramap on the key type
+   */
+  final def contramap[KK](f: KK => K): SnapshotStorage[F, KK, S, V] =
+    new SnapshotStorage[F, KK, S, V] {
+      def get(key: KK, sequence: SequenceQuery[S]) =
+        self.get(f(key), sequence)
+
+      def put(key: KK, snapshot: Snapshot[S, V], mode: SnapshotStoreMode) =
+        self.put(f(key), snapshot, mode)
+    }
 }
 
 /**
@@ -58,6 +70,12 @@ object SnapshotStorage {
 
     case class Unknown(i: Invalid) extends Error
   }
+
+  implicit def SnapshotStorageContravariant[F[_], S, V]: Contravariant[SnapshotStorage[F, ?, S, V]] =
+    new Contravariant[SnapshotStorage[F, ?, S, V]] {
+      override def contramap[K, KK](store: SnapshotStorage[F, K, S, V])(f: KK => K): SnapshotStorage[F, KK, S, V] =
+        store.contramap(f)
+    }
 }
 
 sealed trait SnapshotStoreMode {

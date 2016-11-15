@@ -10,32 +10,32 @@ import scalaz.std.option._
  * to an aggregate type.
  * @param apply Function from a sequence to an operation that should occur (i.e. should we save the event or reject it)
  */
-case class Operation[S, E](apply: Option[S] => Operation.Result[E])
+case class Operation[S, A](apply: Option[S] => Operation.Result[A])
 
 object Operation {
-  def insert[S, E](e: E): Operation[S, E] =
+  def insert[S, A](e: A): Operation[S, A] =
     Operation { _ => Result.success(e) }
 
-  def ifSeq[S: Equal, E](seq: S, e: E): Operation[S, E] =
+  def ifSeq[S: Equal, A](seq: S, a: A): Operation[S, A] =
     Operation { oseq =>
-      if (oseq === Some(seq)) Result.success(e)
+      if (oseq === Some(seq)) Result.success(a)
       else Result.reject(Reason(s"Mismatched event stream sequence number: $oseq does not match expected $seq").wrapNel)
     }
 
   object syntax {
-    implicit class ToOperationOps[E](val self: E) {
-      def op[S]: Operation[S, E] =
+    implicit class ToOperationOps[A](val self: A) {
+      def op[S]: Operation[S, A] =
         Operation.insert(self)
     }
   }
 
-  sealed trait Result[E] {
+  sealed trait Result[A] {
     import Result._
 
-    def orElse(other: => Result[E]): Result[E] =
+    def orElse(other: => Result[A]): Result[A] =
       fold(_ => other, _ => this)
 
-    def fold[T](reject: NonEmptyList[Reason] => T, success: E => T): T =
+    def fold[T](reject: NonEmptyList[Reason] => T, success: A => T): T =
       this match {
         case Success(t) => success(t)
         case Reject(r)  => reject(r)
@@ -43,13 +43,13 @@ object Operation {
   }
 
   object Result {
-    case class Success[E](event: E) extends Result[E]
-    case class Reject[E](reasons: NonEmptyList[Reason]) extends Result[E]
+    case class Success[A](event: A) extends Result[A]
+    case class Reject[A](reasons: NonEmptyList[Reason]) extends Result[A]
 
-    def success[E](e: E): Result[E] =
-      Success(e)
+    def success[A](a: A): Result[A] =
+      Success(a)
 
-    def reject[E](r: NonEmptyList[Reason]): Result[E] =
+    def reject[A](r: NonEmptyList[Reason]): Result[A] =
       Reject(r)
   }
 }

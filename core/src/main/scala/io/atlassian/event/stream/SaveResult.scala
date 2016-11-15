@@ -6,10 +6,10 @@ import scalaz.NonEmptyList
 /**
  * Result of saving an event to the stream.
  */
-sealed trait SaveResult[S] {
+sealed trait SaveResult[A] {
   import SaveResult._
 
-  def fold[X](success: S => X, rejected: NonEmptyList[Reason] => X, timedOut: => X): X =
+  def fold[X](success: A => X, rejected: NonEmptyList[Reason] => X, timedOut: => X): X =
     this match {
       case Success(v, _)      => success(v)
       case Reject(reasons, _) => rejected(reasons)
@@ -20,16 +20,16 @@ sealed trait SaveResult[S] {
 }
 
 object SaveResult {
-  case class Success[S](s: S, retryCount: Int) extends SaveResult[S]
-  case class Reject[S](reasons: NonEmptyList[Reason], retryCount: Int) extends SaveResult[S]
-  case class TimedOut[S](retryCount: Int) extends SaveResult[S]
+  case class Success[A](a: A, retryCount: Int) extends SaveResult[A]
+  case class Reject[A](reasons: NonEmptyList[Reason], retryCount: Int) extends SaveResult[A]
+  case class TimedOut[A](retryCount: Int) extends SaveResult[A]
 
-  def success[S](s: S, retryCount: Int): SaveResult[S] =
-    Success(s, retryCount)
+  def success[A](a: A, retryCount: Int): SaveResult[A] =
+    Success(a, retryCount)
 
-  def reject[S](reasons: NonEmptyList[Reason], retryCount: Int): SaveResult[S] =
+  def reject[A](reasons: NonEmptyList[Reason], retryCount: Int): SaveResult[A] =
     Reject(reasons, retryCount)
 
-  def timedOut[S](retryCount: Int): SaveResult[S] =
+  def timedOut[A](retryCount: Int): SaveResult[A] =
     TimedOut(retryCount)
 }
