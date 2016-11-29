@@ -19,6 +19,9 @@ sealed trait SaveResult[A] {
     }
 
   def retryCount: Int
+
+  def canRetry: Boolean =
+    fold(_ => false, _ => false, true)
 }
 
 object SaveResult {
@@ -34,6 +37,15 @@ object SaveResult {
 
   def timedOut[A](retryCount: Int): SaveResult[A] =
     TimedOut(retryCount)
+
+  def fromOperationResult[A](retryCount: Int)(r: Operation.Result[A]): SaveResult[A] =
+    r.fold(SaveResult.Reject(_, retryCount), SaveResult.Success(_, retryCount))
+
+  def fromEventStreamError[A](retryCount: Int)(e: EventStreamError): SaveResult[A] =
+    e match {
+      case EventStreamError.DuplicateEvent => SaveResult.timedOut[A](retryCount)
+      case EventStreamError.Rejected(r)    => SaveResult.reject[A](r, retryCount)
+    }
 
   implicit def ShowSaveResult[A: Show]: Show[SaveResult[A]] =
     Show.showFromToString

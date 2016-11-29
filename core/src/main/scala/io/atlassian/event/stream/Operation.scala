@@ -24,6 +24,16 @@ object Operation {
       else Result.reject(Reason(s"Mismatched event stream sequence number: $oseq does not match expected $seq").wrapNel)
     }
 
+  def runMany[KK, S: Sequence, E](key: KK, latest: S, ops: NonEmptyList[Operation[S, E]]): Operation.Result[NonEmptyList[Event[KK, S, E]]] = {
+    def event(s: S, e: E): Event[KK, S, E] =
+      Event.next(key, Some(s), e)
+
+    foldMapLeft1M(ops)(_(latest).map(e => NonEmptyList(event(latest, e)))) { (nel, op) =>
+      val s = nel.head.id.seq
+      op(s).map(event(s, _) <:: nel)
+    }.map(_.reverse)
+  }
+
   object syntax {
     implicit class ToOperationOps[E](val self: E) {
       def op[S]: Operation[S, E] =
