@@ -1,7 +1,7 @@
 package io.atlassian.event
 package stream
 
-import scalaz.{ Monoid, NonEmptyList, Show }
+import scalaz.{ Bind, Monoid, NonEmptyList, Show }
 import scalaz.syntax.monoid._
 import scalaz.syntax.show._
 
@@ -53,4 +53,26 @@ object SaveResult {
           case (TimedOut(i), Reject(as, j))   => Reject(Reason(timedOut(i).toString()) <:: as, i + j)
         }
     }
+
+  implicit val SaveResultMonad: Bind[SaveResult] = new Bind[SaveResult] {
+    def map[A, B](fa: SaveResult[A])(f: A => B): SaveResult[B] =
+      fa match {
+        case Success(a, retryCount) =>
+          Success(f(a), retryCount)
+        case Reject(reasons, retryCount) =>
+          Reject(reasons, retryCount)
+        case TimedOut(retryCount) =>
+          TimedOut(retryCount)
+      }
+
+    def bind[A, B](fa: SaveResult[A])(f: A => SaveResult[B]): SaveResult[B] =
+      fa match {
+        case Success(a, retryCount) =>
+          f(a)
+        case Reject(reasons, retryCount) =>
+          Reject(reasons, retryCount)
+        case TimedOut(retryCount) =>
+          TimedOut(retryCount)
+      }
+  }
 }

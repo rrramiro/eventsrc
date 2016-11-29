@@ -1,7 +1,7 @@
 package io.atlassian.event
 package stream
 
-import scalaz.{ Equal, NonEmptyList }
+import scalaz.{ Equal, Monad, NonEmptyList, Traverse }
 import scalaz.syntax.all._
 import scalaz.std.option._
 
@@ -10,8 +10,8 @@ import scalaz.std.option._
  * to an aggregate type.
  * @param apply Function from a sequence to an operation that should occur (i.e. should we save the event or reject it)
  */
-case class Operation[S, E](run: Option[S] => Operation.Result[E]) {
-  def apply(op: Option[S]): Operation.Result[E] = run(op)
+case class Operation[S, E](run: S => Operation.Result[E]) {
+  def apply(op: S): Operation.Result[E] = run(op)
 }
 
 object Operation {
@@ -20,7 +20,7 @@ object Operation {
 
   def ifSeq[S: Equal, E](seq: S, e: E): Operation[S, E] =
     Operation { oseq =>
-      if (oseq === Some(seq)) Result.success(e)
+      if (oseq === seq) Result.success(e)
       else Result.reject(Reason(s"Mismatched event stream sequence number: $oseq does not match expected $seq").wrapNel)
     }
 
@@ -53,5 +53,26 @@ object Operation {
 
     def reject[E](r: NonEmptyList[Reason]): Result[E] =
       Reject(r)
+
+    implicit val ResultInstances: Monad[Result] with Traverse[Result] = new Monad[Result] with Traverse[Result] {
+      def point[A](a: => A): Result[A] =
+        success(a)
+
+      def bind[A, B](fa: Result[A])(f: A => Result[B]): Result[B] =
+        fa match {
+          case Success(event) =>
+            f(event)
+          case Reject(reasons) =>
+            Reject(reasons)
+        }
+
+      def traverseImpl[G[_], A, B](fa: Result[A])(f: A => G[B])(implicit G: scalaz.Applicative[G]): G[Result[B]] =
+        fa match {
+          case Success(event) =>
+            f(event).map(Success.apply)
+          case Reject(reasons) =>
+            G.point(Reject(reasons))
+        }
+    }
   }
 }
