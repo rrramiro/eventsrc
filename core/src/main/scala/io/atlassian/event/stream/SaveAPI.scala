@@ -3,7 +3,7 @@ package stream
 
 import scala.concurrent.duration._
 import scalaz.effect.LiftIO
-import scalaz.{ Functor, Monad, NonEmptyList }
+import scalaz.{ Applicative, Functor, Monad, NonEmptyList }
 import scalaz.syntax.all._
 
 trait SaveAPI[F[_], KK, E, K, S] {
@@ -14,6 +14,16 @@ trait SaveAPI[F[_], KK, E, K, S] {
 
 object SaveAPI {
 
+  def storeOperations[F[_]: Applicative, KK, K, S: Sequence, E](store: EventStorage[F, KK, S, E], key: KK, s: S, ops: NonEmptyList[Operation[S, E]], retryCount: Int): F[SaveResult[S]] =
+    Operation.runMany(key, s, ops).traverse(store.batchPut[NonEmptyList]).map {
+      SaveResult.fromOperationResult(retryCount)(_).flatMap {
+        _.fold(
+          SaveResult.fromEventStreamError(retryCount),
+          events => SaveResult.Success(events.last.id.seq, retryCount)
+        )
+      }
+    }
+
   def apply[F[_]: LiftIO, KK, E, K, S](config: SaveAPI.Config[F], toStreamKey: K => KK, store: EventStorage[F, KK, S, E]): SaveAPI[F, KK, E, K, S] =
     new SaveAPI[F, KK, E, K, S] {
       override def save(k: K, op: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
@@ -22,15 +32,7 @@ object SaveAPI {
       override def batch(key: K, ops: NonEmptyList[Operation[S, E]])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] = {
         def go(retryCount: Int): F[SaveResult[S]] =
           latestSeq(key).flatMap { latest =>
-            val s = latest.getOrElse(Sequence[S].first)
-            Operation.runMany(toStreamKey(key), s, ops).traverse(store.batchPut[NonEmptyList]).map {
-              SaveResult.fromOperationResult(retryCount)(_).flatMap {
-                _.fold(
-                  SaveResult.fromEventStreamError(retryCount),
-                  events => SaveResult.Success(events.last.id.seq, retryCount)
-                )
-              }
-            }
+            storeOperations(store, toStreamKey(key), latest.getOrElse(Sequence[S].first), ops, retryCount)
           }
 
         Retry(go, config.retry, _.canRetry)
