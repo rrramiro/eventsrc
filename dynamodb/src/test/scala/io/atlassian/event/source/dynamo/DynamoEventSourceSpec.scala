@@ -5,6 +5,7 @@ package dynamo
 import org.junit.runner.RunWith
 import org.specs2.main.Arguments
 import io.atlassian.aws.dynamodb._
+import scalaz.effect.LiftIO
 import scalaz.std.anyVal._
 import scalaz.concurrent.Task
 import org.scalacheck.Prop
@@ -28,10 +29,11 @@ class DynamoEventSourceSpec(val arguments: Arguments) extends ScalaCheckSpec wit
 
     class MyDAO extends DAO[Task](tableDefinition)
 
-    class DBEventStoreAPI[F[_]](val store: Storage[F])(implicit val M: Monad[F], val C: Catchable[F]) extends API[F]
+    class DBEventStoreAPI[F[_]](val store: Storage[F])(implicit val M: Monad[F], val L: LiftIO[F], val C: Catchable[F]) extends API[F]
 
     lazy val eventStore = new MyDAO
 
+    implicit val taskLiftIO = TaskLiftIO
     lazy val eventSourceApi = new DBEventStoreAPI[Task](eventStore)
   }
 
