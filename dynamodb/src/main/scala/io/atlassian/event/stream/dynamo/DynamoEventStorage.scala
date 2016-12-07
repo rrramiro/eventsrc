@@ -1,16 +1,15 @@
 package io.atlassian.event.stream.dynamo
 
 import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
-import io.atlassian.aws.dynamodb.Write.Mode.Insert
-import io.atlassian.aws.dynamodb._
-import io.atlassian.event.stream.{ Event, EventId, EventStorage, EventStreamError }
-import org.joda.time.DateTime
-
-import scalaz._
-import scalaz.stream.Process
-import scalaz.syntax.either._
-import scalaz.syntax.monad._
+import io.atlassian.aws.dynamodb.{ Comparison, Decoder, DynamoDB, DynamoDBAction, Encoder, Page, ScanDirection, Table, TableDefinition, Write }
 import DynamoDBAction._
+import io.atlassian.aws.dynamodb.Write.Mode.Insert
+import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError }
+
+import scalaz.{ Catchable, Foldable, Monad, NonEmptyList, OptionT, Traverse, \/, ~> }
+import scalaz.std.list._
+import scalaz.stream.Process
+import scalaz.syntax.all._
 
 /**
  * Implementation of EventStorage using DynamoDB via the aws-scala library. To use it:
@@ -53,7 +52,7 @@ class DynamoEventStorage[F[_], KK, S, E](
     runAction compose
       table.transform(DynamoDB.interpreter(table)(schema))
 
-  lazy val schema =
+  private lazy val schema =
     TableDefinition.from[EID, EV, KK, S](tableDef.name, columns.eventId, columns.event, tableDef.hash, tableDef.range)
 
   override def get(key: KK, fromSeq: Option[S]): Process[F, Event[KK, S, E]] = {
@@ -83,16 +82,28 @@ class DynamoEventStorage[F[_], KK, S, E](
   }
 
   override def put(event: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
-    for {
-      putResult <- interpret(table.putIfAbsent(event.id, event))
+    interpret { table.putIfAbsent(event.id, event) }.map {
+      case Insert.New    => event.right
+      case Insert.Failed => EventStreamError.DuplicateEvent.left[EV]
+    }
 
-      r <- putResult match {
-        case Insert.New    => event.right.point[F]
-        case Insert.Failed => EventStreamError.DuplicateEvent.left[EV].point[F]
-      }
-    } yield r
+  // DynamoDB has a limit of 25 events within a batch.
+  def chunksOf25[F[_]: Foldable, A](fa: F[A]): List[List[A]] =
+    fa.toList.grouped(25).toList
 
-  def latest(key: KK): OptionT[F, Event[KK, S, E]] = {
+  override def batchPut[G[_]: Traverse](events: G[Event[KK, S, E]]): F[EventStreamError \/ G[Event[KK, S, E]]] = {
+    val chunks = chunksOf25(events)
+    interpret(chunks.traverse { chunk =>
+      table.batchPut(chunk.map(e => (e.id, e)).toMap).map { m =>
+        if (m.isEmpty)
+          \/.right(())
+        else
+          \/.left(EventStreamError.DuplicateEvent)
+      }: table.DBAction[EventStreamError \/ Unit]
+    }).map(_.sequence_[EventStreamError \/ ?, Unit].as(events))
+  }
+
+  override def latest(key: KK): OptionT[F, Event[KK, S, E]] = {
     def runQuery[A](q: table.Query, f: Page[S, EV] => Option[A]) =
       OptionT(interpret(table.query(q).map(f)))
 

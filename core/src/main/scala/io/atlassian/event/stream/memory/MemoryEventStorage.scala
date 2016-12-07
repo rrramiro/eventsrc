@@ -3,11 +3,12 @@ package io.atlassian.event.stream.memory
 import io.atlassian.event.Sequence
 import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError }
 
-import scalaz.{ \/, OptionT }
+import scalaz.{ OptionT, Traverse, \/ }
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.syntax.either._
 import scalaz.syntax.order._
+import scalaz.syntax.traverse._
 
 /**
  * Basic implementation that stores events in an in-memory map.
@@ -40,6 +41,9 @@ object MemoryEventStorage {
             }
           }
         }
+
+      override def batchPut[G[_]: Traverse](events: G[Event[KK, S, E]]): Task[EventStreamError \/ G[Event[KK, S, E]]] =
+        events.map(put).sequenceU.map { _.sequenceU }
 
       def latest(key: KK) =
         OptionT(Task.delay {
