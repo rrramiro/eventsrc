@@ -1,7 +1,8 @@
 package io.atlassian.event
 package stream
 
-import scalaz.{ Equal, Monad, NonEmptyList, Traverse }
+import scalaz.{ \/, EitherT, Equal, Monad, NonEmptyList, Traverse }
+import scalaz.effect.IO
 import scalaz.syntax.all._
 import scalaz.std.option._
 
@@ -24,14 +25,22 @@ object Operation {
       else Result.reject(Reason(s"Mismatched event stream sequence number: $oseq does not match expected $seq").wrapNel)
     }
 
-  def runMany[KK, S: Sequence, E](key: KK, latest: S, ops: NonEmptyList[Operation[S, E]]): Operation.Result[NonEmptyList[Event[KK, S, E]]] = {
-    def event(s: S, e: E): Event[KK, S, E] =
+  def runMany[KK, S: Sequence, E](key: KK, latest: S, ops: NonEmptyList[Operation[S, E]]): IO[Operation.Result[NonEmptyList[Event[KK, S, E]]]] = {
+    type Error = NonEmptyList[Reason]
+    type Ev = Event[KK, S, E]
+    type Evs = NonEmptyList[Ev]
+    type EIO[A] = EitherT[IO, Error, A]
+
+    def event(s: S, e: E): IO[Ev] =
       Event.next(key, Some(s), e)
 
-    foldMapLeft1M(ops)(_(latest).map(e => NonEmptyList(event(latest, e)))) { (nel, op) =>
+    def transform(s: S)(op: Operation[S, E]): EIO[Ev] =
+      EitherT(op(s).toDisjunction.traverse(e => event(s, e)))
+
+    foldMapLeft1M[NonEmptyList, EIO, Operation[S, E], Evs](ops)(transform(latest)(_).map(NonEmptyList(_))) { (nel, op) =>
       val s = nel.head.id.seq
-      op(s).map(event(s, _) <:: nel)
-    }.map(_.reverse)
+      transform(s)(op).map(_ <:: nel)
+    }.map(_.reverse).run.map(Result.fromDisjunction)
   }
 
   object syntax {
@@ -52,11 +61,17 @@ object Operation {
         case Success(t) => success(t)
         case Reject(r)  => reject(r)
       }
+
+    def toDisjunction: NonEmptyList[Reason] \/ E =
+      fold(_.left, _.right)
   }
 
   object Result {
     case class Success[E](event: E) extends Result[E]
     case class Reject[E](reasons: NonEmptyList[Reason]) extends Result[E]
+
+    def fromDisjunction[E](d: NonEmptyList[Reason] \/ E): Result[E] =
+      d.fold(Reject.apply, Success.apply)
 
     def success[E](e: E): Result[E] =
       Success(e)

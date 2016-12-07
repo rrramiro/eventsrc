@@ -3,6 +3,7 @@ package stream
 
 import org.joda.time.DateTime
 import scalaz.Equal
+import scalaz.effect.IO
 import scalaz.syntax.equal._
 
 /**
@@ -15,9 +16,10 @@ case class Event[KK, S, E](id: EventId[KK, S], time: DateTime, operation: E) {
 }
 
 object Event {
-  // TODO: Add Task
-  def next[KK, S: Sequence, E](key: KK, seq: Option[S], op: E): Event[KK, S, E] =
-    Event(EventId(key, seq.map { Sequence[S].next }.getOrElse { Sequence[S].first }), DateTime.now, op)
+  def next[KK, S: Sequence, E](key: KK, seq: Option[S], op: E): IO[Event[KK, S, E]] =
+    IO { DateTime.now }.map { now =>
+      Event(EventId(key, seq.map { Sequence[S].next }.getOrElse { Sequence[S].first }), now, op)
+    }
 
   def at[KK, S, E](e: Event[KK, S, E]): (S, DateTime) =
     (e.id.seq, e.time)
