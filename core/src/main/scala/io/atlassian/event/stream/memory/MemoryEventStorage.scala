@@ -42,9 +42,6 @@ object MemoryEventStorage {
           }
         }
 
-      override def batchPut[G[_]: Traverse](events: G[Event[KK, S, E]]): Task[EventStreamError \/ G[Event[KK, S, E]]] =
-        events.map(put).sequenceU.map { _.sequenceU }
-
       def latest(key: KK) =
         OptionT(Task.delay {
           map.getOrElse(key, Nil).headOption

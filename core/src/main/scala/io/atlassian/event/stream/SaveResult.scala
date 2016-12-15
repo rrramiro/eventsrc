@@ -1,7 +1,8 @@
 package io.atlassian.event
 package stream
 
-import scalaz.{ Bind, Monoid, NonEmptyList, Show }
+import scalaz.{ Applicative, Bind, Monoid, NonEmptyList, Traverse, Show }
+import scalaz.syntax.applicative._
 import scalaz.syntax.monoid._
 import scalaz.syntax.show._
 
@@ -66,8 +67,8 @@ object SaveResult {
         }
     }
 
-  implicit val SaveResultMonad: Bind[SaveResult] = new Bind[SaveResult] {
-    def map[A, B](fa: SaveResult[A])(f: A => B): SaveResult[B] =
+  implicit val SaveResultMonad: Bind[SaveResult] with Traverse[SaveResult] = new Bind[SaveResult] with Traverse[SaveResult] {
+    override def map[A, B](fa: SaveResult[A])(f: A => B): SaveResult[B] =
       fa match {
         case Success(a, retryCount) =>
           Success(f(a), retryCount)
@@ -75,6 +76,16 @@ object SaveResult {
           Reject(reasons, retryCount)
         case TimedOut(retryCount) =>
           TimedOut(retryCount)
+      }
+
+    def traverseImpl[G[_]: Applicative, A, B](fa: SaveResult[A])(f: A => G[B]): G[SaveResult[B]] =
+      fa match {
+        case Success(a, retryCount) =>
+          f(a).map(Success(_, retryCount))
+        case Reject(reasons, retryCount) =>
+          reject(reasons, retryCount).point[G]
+        case TimedOut(retryCount) =>
+          timedOut(retryCount).point[G]
       }
 
     def bind[A, B](fa: SaveResult[A])(f: A => SaveResult[B]): SaveResult[B] =

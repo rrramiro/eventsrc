@@ -88,9 +88,6 @@ object TestEventStorage {
           override def put(event: Event[KK, S, E]): SafeCatchable[EventStreamError \/ Event[KK, S, E]] =
             p
 
-          override def batchPut[G[_]: Traverse](events: G[Event[KK, S, E]]): SafeCatchable[EventStreamError \/ G[Event[KK, S, E]]] =
-            events.map(put).sequenceU.map { _.sequenceU }
-
           override def latest(key: KK): OptionT[SafeCatchable, Event[KK, S, E]] =
             l
         }

@@ -87,22 +87,6 @@ class DynamoEventStorage[F[_], KK, S, E](
       case Insert.Failed => EventStreamError.DuplicateEvent.left[EV]
     }
 
-  // DynamoDB has a limit of 25 events within a batch.
-  def chunksOf25[F[_]: Foldable, A](fa: F[A]): List[List[A]] =
-    fa.toList.grouped(25).toList
-
-  override def batchPut[G[_]: Traverse](events: G[Event[KK, S, E]]): F[EventStreamError \/ G[Event[KK, S, E]]] = {
-    val chunks = chunksOf25(events)
-    interpret(chunks.traverse { chunk =>
-      table.batchPut(chunk.map(e => (e.id, e)).toMap).map { m =>
-        if (m.isEmpty)
-          \/.right(())
-        else
-          \/.left(EventStreamError.DuplicateEvent)
-      }: table.DBAction[EventStreamError \/ Unit]
-    }).map(_.sequence_[EventStreamError \/ ?, Unit].as(events))
-  }
-
   override def latest(key: KK): OptionT[F, Event[KK, S, E]] = {
     def runQuery[A](q: table.Query, f: Page[S, EV] => Option[A]) =
       OptionT(interpret(table.query(q).map(f)))

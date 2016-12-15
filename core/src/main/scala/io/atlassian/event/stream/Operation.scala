@@ -25,7 +25,7 @@ object Operation {
       else Result.reject(Reason(s"Mismatched event stream sequence number: $oseq does not match expected $seq").wrapNel)
     }
 
-  def runMany[KK, S: Sequence, E](key: KK, latest: S, ops: NonEmptyList[Operation[S, E]]): IO[Operation.Result[NonEmptyList[Event[KK, S, E]]]] = {
+  def enumerate[KK, S: Sequence, E](key: KK, latest: S, ops: NonEmptyList[Operation[S, E]]): IO[Operation.Result[NonEmptyList[Event[KK, S, E]]]] = {
     type Error = NonEmptyList[Reason]
     type Ev = Event[KK, S, E]
     type Evs = NonEmptyList[Ev]

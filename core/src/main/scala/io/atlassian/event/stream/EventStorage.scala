@@ -31,14 +31,6 @@ trait EventStorage[F[_], K, S, E] { self =>
   def put(event: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]]
 
   /**
-   * Save the given events.
-   *
-   * @return Either the first Error encountered or all the events that were saved. Other non-specific errors should be available
-   *         through the container F.
-   */
-  def batchPut[G[_]: Traverse](events: G[Event[K, S, E]]): F[EventStreamError \/ G[Event[K, S, E]]]
-
-  /**
    * Get the latest event.
    *
    * @param key The key
@@ -58,9 +50,6 @@ trait EventStorage[F[_], K, S, E] { self =>
 
       def put(event: Event[KK, SS, E]) =
         self.put { event.updateId(_.bimap(k, s)) }.map { _.map(updateKey) }
-
-      override def batchPut[G[_]: Traverse](events: G[Event[KK, SS, E]]): F[EventStreamError \/ G[Event[KK, SS, E]]] =
-        self.batchPut { events.map { _.updateId(_.bimap(k, s)) } }.map { _.map { _.map { updateKey } } }
 
       def latest(key: KK) = self.latest(k(key)).map(updateKey)
     }
@@ -123,9 +112,6 @@ object EventStorage {
 
           override def put(event: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]] =
             primary.put(event)
-
-          override def batchPut[G[_]: Traverse](events: G[Event[K, S, E]]): F[EventStreamError \/ G[Event[K, S, E]]] =
-            primary.batchPut(events)
         }
     }
 }

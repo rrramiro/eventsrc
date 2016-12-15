@@ -21,7 +21,7 @@ class RetryStrategySpec extends SpecificationWithJUnit with ScalaCheck {
 
   def correctEvaluationCountDurationList = Prop.forAll { (retryCount: ReasonableParameters) =>
     val counter = new AtomicInteger(0)
-    def foo(i: Int): Task[Int] =
+    def foo(ignored: Option[Int], i: Int): Task[Int] =
       Task.delay {
         counter.incrementAndGet()
       }
@@ -31,7 +31,7 @@ class RetryStrategySpec extends SpecificationWithJUnit with ScalaCheck {
 
   def correctEvaluationCountRetryInterval = Prop.forAll { (retryCount: ReasonableParameters) =>
     val counter = new AtomicInteger(0)
-    def foo(i: Int): Task[Int] =
+    def foo(ignored: Option[Int], i: Int): Task[Int] =
       Task.delay {
         counter.incrementAndGet()
       }
