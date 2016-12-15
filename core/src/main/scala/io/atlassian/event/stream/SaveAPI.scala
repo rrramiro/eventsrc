@@ -44,7 +44,7 @@ object SaveAPI {
                 e => SaveResult.success(e.id.seq, retryCount)
               )
             )
-        }).bimap(toUnprocessedResult, _.head)
+        }).bimap(toUnprocessedResult, _.last)
       } yield result
 
     program.run
