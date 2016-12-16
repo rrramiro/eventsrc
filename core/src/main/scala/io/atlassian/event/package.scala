@@ -7,6 +7,14 @@ import scalaz.syntax.either._
 import scalaz.syntax.foldable1._
 import scalaz.syntax.monad._
 import scalaz.syntax.plus._
+import scalaz.syntax.std.option._
+
+case class Alter[F[_], A](run: F[A])
+
+object Alter {
+  implicit def AlterSemigroup[F[_]: Plus, A]: Semigroup[Alter[F, A]] =
+    Plus[F].semigroup[A].xmap(Alter.apply, _.run)
+}
 
 package object event {
   implicit class TaggedOps[A, T](val a: A @@ T) extends AnyVal {
@@ -18,23 +26,54 @@ package object event {
       G.bind(b)(f(_, a))
     }
 
-  def untilFirstLeft[F[_]: Foldable1: Applicative: Plus, G[_]: Monad, A, B, C](fa: F[A], f: A => G[B \/ C]): EitherT[G, (B, F[A]), F[C]] = {
-    def go(a: A): G[(B, F[A]) \/ F[C]] =
-      f(a).map(
-        _.bimap(
-          (_, a.point[F]),
-          _.point[F]
-        )
-      )
+  def bifpoint[F[_, _]: Bifunctor, G[_]: Applicative, A, B](fa: F[A, B]): F[G[A], G[B]] =
+    fa.bimap(_.point[G], _.point[G])
 
-    EitherT(fa.foldMapLeft1(go) { (g, a) =>
-      g.flatMap {
-        _.fold(
-          _.rightMap(_ <+> a.point[F]).left.point[G],
-          cs => go(a).map(_.rightMap(cs <+> _))
+  def eitherTSeparate1[F[_]: Foldable1: Applicative: Plus, G[_]: Bind, A, B](fa: F[EitherT[G, A, B]]): EitherT[G, F[A], F[B]] = {
+    def bialter(fab: Validation[F[A], F[B]]): Validation[Alter[F, A], Alter[F, B]] =
+      fab.bimap(Alter.apply, Alter.apply)
+
+    fa.foldMapLeft1(bifpoint[({ type l[a, b] = EitherT[G, a, b] })#l, F, A, B]) { (b, a) =>
+      EitherT(b.validation.flatMap { bv =>
+        a.validation.map { av =>
+          (bialter(bv) +++ bialter(bifpoint(av))).disjunction.bimap(_.run, _.run)
+        }
+      })
+    }
+  }
+
+  def mapT[F[_], G[_], A, B, C, D](fa: EitherT[F, A, B], f: F[A \/ B] => G[C \/ D]): EitherT[G, C, D] =
+    EitherT(f(fa.run))
+
+  def mapF[F[_], G[_], A, B](fa: EitherT[F, A, B], f: F[A \/ B] => G[A \/ B]): EitherT[G, A, B] =
+    mapT(fa, f)
+
+  def head1[F[_]: Foldable1, A](fa: F[A]): A =
+    fa.foldMapRight1(identity[A]) { (a, _) => a }
+
+  def untilFirstLeft[F[_]: Foldable1: Applicative: Plus, G[_]: Monad, A, B, E](fa: F[A], f: A => EitherT[G, E, B]): EitherT[G, (E, F[A]), F[B]] = {
+    type S[X] = StateT[G, Option[E], X]
+
+    def run(a: A): G[(Option[E], (E, A) \/ B)] =
+      f(a).run.map(e => (e.swap.toOption, e.leftMap((_, a))))
+
+    val eitherts: F[EitherT[S, (E, A), B]] =
+      fa.map { a =>
+        EitherT[S, (E, A), B](
+          StateT { firstError =>
+            firstError.fold(run(a)) { e =>
+              (e.some, (e, a).left[B]).point[G]
+            }
+          }
         )
       }
-    })
+
+    mapF[S, G, F[(E, A)], F[B]](
+      eitherTSeparate1(eitherts),
+      _.eval(None)
+    ).leftMap { as =>
+        (head1(as)._1, as.map(_._2))
+      }
   }
 
 }

@@ -2,7 +2,7 @@ package io.atlassian.event
 
 import org.scalacheck.{ Gen, Prop }
 
-import scalaz.{ \/, -\/, NonEmptyList, State, Value }
+import scalaz.{ \/, -\/, EitherT, NonEmptyList, State, Value }
 import scalaz.syntax.traverse._
 
 class UntilFirstLeftSpec extends ScalaCheckSpec {
@@ -44,19 +44,19 @@ class UntilFirstLeftSpec extends ScalaCheckSpec {
   val propSingle: Prop =
     Prop.forAll(genEitherUnit(Gen.posNum[Int])) { p =>
       val expected = p.bimap((_, NonEmptyList(p)), NonEmptyList(_))
-      untilFirstLeft(NonEmptyList(p), Value(_: Int \/ Unit)).run.value mustEqual expected
+      untilFirstLeft(NonEmptyList(p), EitherT.fromDisjunction[Value](_: Int \/ Unit)).run.value mustEqual expected
     }
 
   val propAllRightsIsTraverse: Prop =
     Prop.forAll(genNonEmptyList(genRight[Int, Int](Gen.posNum[Int]))) { p =>
       val expected = p.sequenceU
-      untilFirstLeft(p, Value(_: Int \/ Int)).run.value mustEqual expected
+      untilFirstLeft(p, EitherT.fromDisjunction[Value](_: Int \/ Int)).run.value mustEqual expected
     }
 
   val propUnprocessed: Prop =
     Prop.forAll(genWithAtLeastOneFailure) { p =>
       val expected = p.list.dropWhile(_.isRight)
-      untilFirstLeft(p, Value(_: Int \/ Int)).run.value must beLike {
+      untilFirstLeft(p, EitherT.fromDisjunction[Value](_: Int \/ Int)).run.value must beLike {
         case -\/((_, l)) => l.list mustEqual expected
       }
     }
@@ -65,7 +65,7 @@ class UntilFirstLeftSpec extends ScalaCheckSpec {
     Prop.forAll(genWithAtLeastOneFailure) { p =>
       p.list.find(_.isLeft) must beLike {
         case Some(-\/(expected)) =>
-          untilFirstLeft(p, Value(_: Int \/ Int)).run.value must beLike {
+          untilFirstLeft(p, EitherT.fromDisjunction[Value](_: Int \/ Int)).run.value must beLike {
             case -\/((e, _)) => e mustEqual expected
           }
       }
@@ -74,6 +74,7 @@ class UntilFirstLeftSpec extends ScalaCheckSpec {
   val propCancels: Prop =
     Prop.forAll(genWithAtLeastOneFailure) { p =>
       val expected = p.list.takeWhile(_.isRight).length + 1 // has to run at least once
-      untilFirstLeft[NonEmptyList, ({ type l[a] = State[Int, a] })#l, Int \/ Int, Int, Int](p, a => State.modify((_: Int) + 1).as(a)).run.exec(0) mustEqual expected
+      type S[A] = State[Int, A]
+      untilFirstLeft[NonEmptyList, S, Int \/ Int, Int, Int](p, a => EitherT[S, Int, Int](State.modify((_: Int) + 1).as(a))).run.exec(0) mustEqual expected
     }
 }

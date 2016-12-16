@@ -49,11 +49,9 @@ object SaveAPI {
               events <- handleOperationResult(enumerated)
               result <- untilFirstLeft[NonEmptyList, F, (Operation[S, E], Event[KK, S, E]), SaveResult[S], SaveResult[S]](ops.zip(events), {
                 case (_, event) =>
-                  store.put(event).map(
-                    _.bimap(
-                      SaveResult.fromEventStreamError(retryCount),
-                      e => SaveResult.success(e.id.seq, retryCount)
-                    )
+                  EitherT(store.put(event)).bimap(
+                    SaveResult.fromEventStreamError(retryCount),
+                    e => SaveResult.success(e.id.seq, retryCount)
                   )
               }).bimap(toUnprocessedResult, _.last)
             } yield result
