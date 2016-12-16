@@ -27,6 +27,9 @@ object SaveAPI {
             storeOperations(store, toStreamKey(key), latest.getOrElse(Sequence[S].first), ops.flatMap(unprocessedOps).getOrElse(initialOps), retryCount)
           }
 
+        def latestSeq(key: K)(implicit F: Functor[F]): F[Option[S]] =
+          store.latest(toStreamKey(key)).map { _.id.seq }.run
+
         def partialSaveResult[A](p: PartialResult): SaveResult[S] =
           p.fold(_._1, identity)
 
@@ -60,9 +63,6 @@ object SaveAPI {
 
         Retry[F, PartialResult](go, config.retry, partialSaveResult(_).canRetry).map(partialSaveResult)
       }
-
-      private def latestSeq(key: K)(implicit F: Functor[F]): F[Option[S]] =
-        store.latest(toStreamKey(key)).map { _.id.seq }.run
     }
 
   case class Config[F[_]](retry: RetryStrategy[F])
