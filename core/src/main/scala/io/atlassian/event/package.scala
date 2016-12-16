@@ -6,15 +6,7 @@ import scalaz.syntax.bifunctor._
 import scalaz.syntax.either._
 import scalaz.syntax.foldable1._
 import scalaz.syntax.monad._
-import scalaz.syntax.plus._
 import scalaz.syntax.std.option._
-
-case class Alter[F[_], A](run: F[A])
-
-object Alter {
-  implicit def AlterSemigroup[F[_]: Plus, A]: Semigroup[Alter[F, A]] =
-    Plus[F].semigroup[A].xmap(Alter.apply, _.run)
-}
 
 package object event {
   implicit class TaggedOps[A, T](val a: A @@ T) extends AnyVal {
@@ -33,7 +25,7 @@ package object event {
     def bialter(fab: Validation[F[A], F[B]]): Validation[Alter[F, A], Alter[F, B]] =
       fab.bimap(Alter.apply, Alter.apply)
 
-    fa.foldMapLeft1(bifpoint[({ type l[a, b] = EitherT[G, a, b] })#l, F, A, B]) { (b, a) =>
+    fa.foldMapLeft1(bifpoint[EitherT[G, ?, ?], F, A, B]) { (b, a) =>
       EitherT(b.validation.flatMap { bv =>
         a.validation.map { av =>
           (bialter(bv) +++ bialter(bifpoint(av))).disjunction.bimap(_.run, _.run)
@@ -75,5 +67,4 @@ package object event {
         (head1(as)._1, as.map(_._2))
       }
   }
-
 }
