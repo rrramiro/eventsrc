@@ -21,12 +21,12 @@ object Settings {
   //, "-Ywarn-all"  // Doesn't work with scala 2.11
   , "-Ywarn-dead-code" // N.B. doesn't work well with the ??? hole
   , "-Ywarn-numeric-widen"
-  , "-Ywarn-value-discard"     
+  , "-Ywarn-value-discard"
   , "-Xmax-classfile-name", "134"
   )
 
-  lazy val standardSettings = 
-    Defaults.coreDefaultSettings ++ 
+  lazy val standardSettings =
+    Defaults.coreDefaultSettings ++
     releaseSettings ++ // sbt-release
     wartRemoval ++
     scalariformSettings ++
@@ -34,12 +34,12 @@ object Settings {
     Seq[Def.Setting[_]] (
       organization := "io.atlassian"
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom
-    , scalaVersion := "2.11.7"
-    , crossScalaVersions  := Seq("2.11.7", "2.10.5")
+    , scalaVersion := "2.11.8"
+    , crossScalaVersions  := Seq("2.11.8", "2.10.5")
     , ReleaseKeys.crossBuild := true
     , autoScalaLibrary := false
     , ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
-    , scalacOptions ++= scalacFlags 
+    , scalacOptions ++= scalacFlags
     , javacOptions ++= Seq("-encoding", "UTF-8")
     , resolvers ++= Seq(
         Resolver.defaultLocal
@@ -55,20 +55,21 @@ object Settings {
         file("LICENSE") -> "META-INF/LICENSE"
       )
     , credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
-    , addCompilerPlugin("org.scalamacros"        % "paradise"       % "2.0.1" cross CrossVersion.full)
-    , addCompilerPlugin("org.spire-math"         % "kind-projector" % "0.7.1" cross CrossVersion.binary)
-    )
+    , addCompilerPlugin("org.scalamacros"        % "paradise"         % "2.1.0" cross CrossVersion.full)
+    , addCompilerPlugin("org.spire-math"         % "kind-projector"   % "0.9.3" cross CrossVersion.binary)
+    , addCompilerPlugin("com.milessabin"         % "si2712fix-plugin" % "1.2.0" cross CrossVersion.full)
+  )
 
   lazy val scalariformPrefs = {
     import scalariform.formatter.preferences._
-         
+
     Seq[Def.Setting[_]](
       ScalariformKeys.preferences := ScalariformKeys.preferences.value
         .setPreference(AlignArguments,                    false) // scalariform 0.1.4
         .setPreference(AlignParameters,                   false)
         .setPreference(AlignSingleLineCaseStatements,     true)
-        .setPreference(CompactControlReadability,         true)  
-        .setPreference(CompactStringConcatenation,        true)  
+        .setPreference(CompactControlReadability,         true)
+        .setPreference(CompactStringConcatenation,        true)
         .setPreference(DoubleIndentClassDeclaration,      true)
         .setPreference(PreserveSpaceBeforeArguments,      true)
         .setPreference(RewriteArrowSymbols,               false)

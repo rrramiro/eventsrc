@@ -22,13 +22,12 @@ package object event {
     fa.bimap(_.point[G], _.point[G])
 
   def eitherTSeparate1[F[_]: Foldable1: Applicative: Plus, G[_]: Bind, A, B](fa: F[EitherT[G, A, B]]): EitherT[G, F[A], F[B]] = {
-    def bialter(fab: Validation[F[A], F[B]]): Validation[Alter[F, A], Alter[F, B]] =
-      fab.bimap(Alter.apply, Alter.apply)
+    import Alter.bialter
 
     fa.foldMapLeft1(bifpoint[EitherT[G, ?, ?], F, A, B]) { (b, a) =>
       EitherT(b.validation.flatMap { bv =>
         a.validation.map { av =>
-          (bialter(bv) +++ bialter(bifpoint(av))).disjunction.bimap(_.run, _.run)
+          (bialter(bv) +++ bifpoint[Validation, Alter[F, ?], A, B](av)).disjunction.bimap(_.run, _.run)
         }
       })
     }
