@@ -21,13 +21,18 @@ package object event {
   def bifpoint[F[_, _]: Bifunctor, G[_]: Applicative, A, B](fa: F[A, B]): F[G[A], G[B]] =
     fa.bimap(_.point[G], _.point[G])
 
+  def biIdT[M[_, _]: Bifunctor, F[_], A, B](fab: M[F[A], F[B]]): M[IdT[F, A], IdT[F, B]] =
+    fab.bimap(IdT.apply, IdT.apply)
+
   def eitherTSeparate1[F[_]: Foldable1: Applicative: Plus, G[_]: Bind, A, B](fa: F[EitherT[G, A, B]]): EitherT[G, F[A], F[B]] = {
-    import Alter.bialter
+    // note, if this fails scalaz has probably implemented this instance on IdT
+    implicit def IdTSemigroup[F[_]: Plus, A]: Semigroup[IdT[F, A]] =
+      Plus[F].semigroup[A].xmap(IdT.apply, _.run)
 
     fa.foldMapLeft1(bifpoint[EitherT[G, ?, ?], F, A, B]) { (b, a) =>
       EitherT(b.validation.flatMap { bv =>
         a.validation.map { av =>
-          (bialter(bv) +++ bifpoint[Validation, Alter[F, ?], A, B](av)).disjunction.bimap(_.run, _.run)
+          (biIdT(bv) +++ bifpoint[Validation, IdT[F, ?], A, B](av)).disjunction.bimap(_.run, _.run)
         }
       })
     }
