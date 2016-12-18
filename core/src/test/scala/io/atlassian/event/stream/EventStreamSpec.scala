@@ -50,8 +50,5 @@ object AlwaysFailingDirectoryEventStream {
 
       override def latest(key: DirectoryId) =
         OptionT.none
-
-      override def batchPut[G[_]: Traverse](events: G[DirEvent]): Task[EventStreamError \/ G[DirEvent]] =
-        events.map(put).sequenceU.map { _.sequenceU }
     }
 }

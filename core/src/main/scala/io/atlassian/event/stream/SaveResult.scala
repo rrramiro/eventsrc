@@ -1,9 +1,8 @@
 package io.atlassian.event
 package stream
 
-import scalaz.{ Bind, Monoid, NonEmptyList, Show }
-import scalaz.syntax.monoid._
-import scalaz.syntax.show._
+import scalaz.{ Applicative, Bind, Monoid, NonEmptyList, Traverse, Show }
+import scalaz.syntax.all._
 
 /**
  * Result of saving an event to the stream.
@@ -50,8 +49,11 @@ object SaveResult {
   implicit def ShowSaveResult[A: Show]: Show[SaveResult[A]] =
     Show.showFromToString
 
-  implicit def MonoidSaveResult[A: Sequence]: Monoid[SaveResult[A]] =
+  implicit def MonoidSaveResult[A: Sequence: Show]: Monoid[SaveResult[A]] =
     new Monoid[SaveResult[A]] {
+      private def reason(result: SaveResult[A]) =
+        Reason(Show[SaveResult[A]].shows(result))
+
       override def zero: SaveResult[A] = Success(Sequence[A].first, 0)
 
       override def append(f1: SaveResult[A], f2: => SaveResult[A]): SaveResult[A] =
@@ -60,31 +62,32 @@ object SaveResult {
           case (Success(_, _), r)             => r
           case (r, Success(_, _))             => r
           case (Reject(a, i), Reject(b, j))   => Reject(a |+| b, i + j)
-          case (Reject(as, j), TimedOut(i))   => Reject(Reason(timedOut(i).toString()) <:: as, i + j)
-          case (TimedOut(i), TimedOut(j))     => Reject(NonEmptyList(Reason(timedOut(i).toString()), Reason(timedOut(j).toString())), i + j)
-          case (TimedOut(i), Reject(as, j))   => Reject(Reason(timedOut(i).toString()) <:: as, i + j)
+          case (Reject(as, j), TimedOut(i))   => Reject(reason(timedOut(i)) <:: as, i + j)
+          case (TimedOut(i), TimedOut(j))     => Reject(NonEmptyList(reason(timedOut(i)), reason(timedOut(j))), i + j)
+          case (TimedOut(i), Reject(as, j))   => Reject(reason(timedOut(i)) <:: as, i + j)
         }
     }
 
-  implicit val SaveResultMonad: Bind[SaveResult] = new Bind[SaveResult] {
-    def map[A, B](fa: SaveResult[A])(f: A => B): SaveResult[B] =
+  implicit val SaveResultMonad: Bind[SaveResult] with Traverse[SaveResult] = new Bind[SaveResult] with Traverse[SaveResult] {
+    override def map[A, B](fa: SaveResult[A])(f: A => B): SaveResult[B] =
       fa match {
-        case Success(a, retryCount) =>
-          Success(f(a), retryCount)
-        case Reject(reasons, retryCount) =>
-          Reject(reasons, retryCount)
-        case TimedOut(retryCount) =>
-          TimedOut(retryCount)
+        case Success(a, retryCount)      => Success(f(a), retryCount)
+        case Reject(reasons, retryCount) => Reject(reasons, retryCount)
+        case TimedOut(retryCount)        => TimedOut(retryCount)
+      }
+
+    def traverseImpl[G[_]: Applicative, A, B](fa: SaveResult[A])(f: A => G[B]): G[SaveResult[B]] =
+      fa match {
+        case Success(a, retryCount)      => f(a).map(Success(_, retryCount))
+        case Reject(reasons, retryCount) => reject(reasons, retryCount).point[G]
+        case TimedOut(retryCount)        => timedOut(retryCount).point[G]
       }
 
     def bind[A, B](fa: SaveResult[A])(f: A => SaveResult[B]): SaveResult[B] =
       fa match {
-        case Success(a, retryCount) =>
-          f(a)
-        case Reject(reasons, retryCount) =>
-          Reject(reasons, retryCount)
-        case TimedOut(retryCount) =>
-          TimedOut(retryCount)
+        case Success(a, retryCount)      => f(a)
+        case Reject(reasons, retryCount) => Reject(reasons, retryCount)
+        case TimedOut(retryCount)        => TimedOut(retryCount)
       }
   }
 }
