@@ -44,6 +44,11 @@ object AlwaysFailingDirectoryEventStream {
         EventStreamError.duplicate.left
       }
 
+    def rewrite(oldEvent: Event[DirectoryId, TwoPartSequence[Long], DirectoryEvent], newEvent: Event[DirectoryId, TwoPartSequence[Long], DirectoryEvent]) =
+      Task {
+        EventStreamError.EventNotFound.left
+      }
+
     def latest(key: DirectoryId) = OptionT.none
   }
 }

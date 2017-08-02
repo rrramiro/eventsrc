@@ -129,6 +129,15 @@ object TestEventStorage {
       ).map(CatchableSuccess.apply)
     )
 
+  def genRewrite[KK: Arbitrary, S: Arbitrary, E: Arbitrary]: Gen[SafeCatchable[EventStreamError \/ Event[KK, S, E]]] =
+    Gen.frequency[SafeCatchable[EventStreamError \/ Event[KK, S, E]]](
+      1 -> CatchableFailure[EventStreamError \/ Event[KK, S, E]](),
+      20 -> Gen.frequency[EventStreamError \/ Event[KK, S, E]](
+        1 -> genEventStreamError.map(_.left),
+        20 -> TestEvent.genEvent[KK, S, E].map(_.right)
+      ).map(CatchableSuccess.apply)
+    )
+
   def genLatest[KK: Arbitrary, S: Arbitrary, E: Arbitrary]: Gen[OptionT[SafeCatchable, Event[KK, S, E]]] =
     Gen.frequency(
       1 -> OptionT.none[SafeCatchable, Event[KK, S, E]],
@@ -143,6 +152,7 @@ object TestEventStorage {
       for {
         g <- genGet[KK, S, E]
         p <- genPut[KK, S, E]
+        r <- genRewrite[KK, S, E]
         l <- genLatest[KK, S, E]
       } yield TestEventStorage(
         g,
@@ -152,6 +162,9 @@ object TestEventStorage {
 
           def put(event: Event[KK, S, E]): SafeCatchable[EventStreamError \/ Event[KK, S, E]] =
             p
+
+          def rewrite(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]) =
+            r
 
           def latest(key: KK): OptionT[SafeCatchable, Event[KK, S, E]] =
             l

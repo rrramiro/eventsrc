@@ -1,11 +1,14 @@
 package io.atlassian.event.stream.memory
 
+import java.security.cert.CertPathValidatorException.Reason
+
 import io.atlassian.event.Sequence
 import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError }
 
-import scalaz.{ \/, OptionT }
+import scalaz.{ NonEmptyList, OptionT, \/ }
 import scalaz.concurrent.Task
 import scalaz.stream.Process
+import scalaz.syntax.applicative._
 import scalaz.syntax.either._
 import scalaz.syntax.order._
 
@@ -38,6 +41,22 @@ object MemoryEventStorage {
                 map += (ev.id.key -> (ev :: currentList))
                 ev.right
             }
+          }
+        }
+
+      override def rewrite(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]): Task[EventStreamError \/ Event[KK, S, E]] =
+        Task.delay {
+          map.synchronized {
+            map.get(oldEvent.id.key).flatMap { currentList =>
+              val (a, b) = currentList.span(!oldEvent.equals(_))
+              b match {
+                case (h :: tail) => {
+                  map += (oldEvent.id.key -> (a ++ (newEvent :: tail)))
+                  Some(newEvent.right[EventStreamError])
+                }
+                case _ => None
+              }
+            }.getOrElse((EventStreamError.EventNotFound: EventStreamError).left[Event[KK, S, E]])
           }
         }
 
