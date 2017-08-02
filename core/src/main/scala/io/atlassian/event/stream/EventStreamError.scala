@@ -16,7 +16,7 @@ object EventStreamError {
 
   case object DuplicateEvent extends EventStreamError
 
-  case object EventChanged extends EventStreamError
+  case object EventNotFound extends EventStreamError
 
   case object EventIdsDoNotMatch extends EventStreamError
 

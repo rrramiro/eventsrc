@@ -93,12 +93,18 @@ class DynamoEventStorage[F[_], KK, S, E](
       }
     } yield r
 
-  override def rewriteEvent(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
+  override def rewrite(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
+    if (oldEvent.id.equals(newEvent.id))
+      rewriteEvent(oldEvent, newEvent)
+    else
+      (EventStreamError.EventIdsDoNotMatch: EventStreamError).left[Event[KK, S, E]].point[F]
+
+  def rewriteEvent(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
     for {
       replaceResult <- interpret(table.replace(oldEvent.id, oldEvent, newEvent))
       r <- replaceResult match {
         case Replace.Wrote  => newEvent.right.point[F]
-        case Replace.Failed => EventStreamError.EventChanged.left[EV].point[F]
+        case Replace.Failed => EventStreamError.EventNotFound.left[EV].point[F]
       }
     } yield r
 
