@@ -52,9 +52,9 @@ object SaveAPI {
         )
       } yield result match {
         case -\/(EventStreamError.DuplicateEvent)     => SaveResult.timedOut[S](retryCount)
-        case -\/(EventStreamError.Rejected(r))        => SaveResult.reject[S](r, retryCount)
         case -\/(EventStreamError.EventNotFound)      => SaveResult.reject[S](NonEmptyList(Reason("The original event changed")), retryCount)
         case -\/(EventStreamError.EventIdsDoNotMatch) => SaveResult.reject[S](NonEmptyList(Reason("The supplied events didn't have matching IDs")), retryCount)
+        case -\/(EventStreamError.Rejected(r))        => SaveResult.reject[S](r, retryCount)
         case \/-(event)                               => SaveResult.success[S](event.id.seq, retryCount)
       }
   }
