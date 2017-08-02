@@ -16,6 +16,10 @@ object EventStreamError {
 
   case object DuplicateEvent extends EventStreamError
 
+  case object EventChanged extends EventStreamError
+
+  case object EventIdsDoNotMatch extends EventStreamError
+
   case class Rejected(s: NonEmptyList[Reason]) extends EventStreamError
 
   implicit val eventStreamErrorEqual: Equal[EventStreamError] =
