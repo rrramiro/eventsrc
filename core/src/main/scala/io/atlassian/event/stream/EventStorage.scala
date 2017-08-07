@@ -32,16 +32,6 @@ trait EventStorage[F[_], K, S, E] { self =>
   def put(event: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]]
 
   /**
-   * Rewrite `oldEvent` to `newEvent`.
-   *
-   * The keys should match.
-   *
-   * @return Either an Error or the event that was saved. Other non-specific errors should be available
-   *         through the container F.
-   */
-  def rewrite(oldEvent: Event[K, S, E], newEvent: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]]
-
-  /**
    * Get the latest event.
    *
    * @param key The key
@@ -61,9 +51,6 @@ trait EventStorage[F[_], K, S, E] { self =>
 
       def put(event: Event[KK, SS, E]) =
         self.put(event.bimap(k, s)).map { _.map { updateKey } }
-
-      def rewrite(oldEvent: Event[KK, SS, E], newEvent: Event[KK, SS, E]) =
-        self.rewrite(oldEvent.bimap(k, s), newEvent.bimap(k, s)).map { _.map { updateKey } }
 
       def latest(key: KK) =
         self.latest(k(key)).map { updateKey }
@@ -133,9 +120,6 @@ object EventStorage {
 
           def put(event: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]] =
             primary.put(event)
-
-          def rewrite(oldEvent: Event[K, S, E], newEvent: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]] =
-            primary.rewrite(oldEvent, newEvent)
         }
     }
 }

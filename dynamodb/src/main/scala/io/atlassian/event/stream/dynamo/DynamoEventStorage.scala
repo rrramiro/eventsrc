@@ -4,7 +4,7 @@ import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
 import io.atlassian.aws.dynamodb.Write.Mode.Replace
 import io.atlassian.aws.dynamodb._
-import io.atlassian.event.stream.{ Event, EventId, EventStorage, EventStreamError }
+import io.atlassian.event.stream.{ Event, EventStreamError, RewritableEventStorage }
 import org.joda.time.DateTime
 
 import scalaz._
@@ -36,7 +36,7 @@ class DynamoEventStorage[F[_], KK, S, E](
     ES: Encoder[S],
     DS: Decoder[S],
     C: Catchable[F]
-) extends EventStorage[F, KK, S, E] {
+) extends RewritableEventStorage[F, KK, S, E] {
 
   lazy val columns = EventSourceColumns(tableDef.key, tableDef.hash, tableDef.range, tableDef.value)
 

@@ -3,7 +3,7 @@ package io.atlassian.event.stream.memory
 import java.security.cert.CertPathValidatorException.Reason
 
 import io.atlassian.event.Sequence
-import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError }
+import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError, RewritableEventStorage }
 
 import scalaz.{ NonEmptyList, OptionT, \/ }
 import scalaz.concurrent.Task
@@ -19,7 +19,7 @@ object MemoryEventStorage {
   def apply[KK, S: Sequence, E] = Task.delay {
     val map = collection.concurrent.TrieMap[KK, List[Event[KK, S, E]]]()
 
-    new EventStorage[Task, KK, S, E] {
+    new RewritableEventStorage[Task, KK, S, E] {
       override def get(key: KK, fromOption: Option[S]): Process[Task, Event[KK, S, E]] = {
         Process.await(Task.delay {
           map.get(key)
