@@ -3,10 +3,8 @@ package stream
 
 import scalaz.{ Functor, InvariantFunctor, Monad, OptionT, Order, Semigroup, \/ }
 import scalaz.stream.{ Process, Tee, tee }
-import scalaz.syntax.bifunctor._
 import scalaz.syntax.applicative._
 import scalaz.syntax.order._
-import scalaz.syntax.either._
 
 /**
  * A source of events. Implementations wrap around an underlying data store (e.g. in-memory map or DynamoDB).
