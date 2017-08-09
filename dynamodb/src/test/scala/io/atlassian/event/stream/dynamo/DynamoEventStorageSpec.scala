@@ -78,7 +78,6 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
        return the correct number of events (no paging)   ${nonPagingGetWorks.set(minTestsOk = NUM_TESTS)}
        return the correct number of events (with paging) ${if (IS_LOCAL) pagingGetWorks.set(minTestsOk = 1) else skipped("SKIPPED - not run in AWS integration mode because it is slow")}
        return the correct number of events when a 'from sequence' is specified ${getFromWorks.set(minTestsOk = NUM_TESTS)}
-       return an eror when events have changed           ${eventReturnsErrorForEventChanged.set(minTestsOk = NUM_TESTS)}
 
                                                          ${step(deleteTestTable)}
                                                          ${step(stopLocalDynamoDB)}
@@ -173,22 +172,6 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
         result <- DBEventStorage.put(event)
       } yield result).unsafePerformSyncAttempt match {
         case \/-(-\/(e)) => e === DuplicateEvent
-        case _           => ko
-      }
-    }
-
-  def eventReturnsErrorForEventChanged =
-    Prop.forAll { (nonEmptyKey: UniqueString, oldValue: String, newValue: String) =>
-      val eventId = EventId.first(nonEmptyKey.unwrap)
-      val seq = DateTime.now
-      val oldEvent = Event(eventId, seq, Transform.insert(oldValue))
-      val oldEventChanged = Event(eventId, seq, Transform.insert(oldValue+"blah"))
-      val newEvent = Event(eventId, seq, Transform.insert(newValue))
-      (for {
-        _ <- DBEventStorage.put(oldEventChanged)
-        result <- DBEventStorage.rewrite(oldEvent, newEvent)
-      } yield result).unsafePerformSyncAttempt match {
-        case \/-(-\/(e)) => e === EventNotFound
         case _           => ko
       }
     }

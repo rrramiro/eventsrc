@@ -1,17 +1,15 @@
-package io.atlassian.event.stream.dynamo
+package io.atlassian.event.stream.unsafe.dynamo
 
 import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
-import io.atlassian.aws.dynamodb.Write.Mode.Insert
 import io.atlassian.aws.dynamodb.Write.Mode.Replace
 import io.atlassian.aws.dynamodb._
-import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError }
-import org.joda.time.DateTime
+import io.atlassian.event.stream.dynamo.EventSourceColumns
+import io.atlassian.event.stream.unsafe.RewritableEventStorage
+import io.atlassian.event.stream.{ Event, EventStreamError }
 
 import scalaz._
-import scalaz.stream.Process
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
-import DynamoDBAction._
 
 /**
  * Implementation of EventStorage using DynamoDB via the aws-scala library. To use it:
@@ -24,7 +22,7 @@ import DynamoDBAction._
  *
  * @tparam F Container around operations on an underlying data store e.g. Task.
  */
-class DynamoEventStorage[F[_], KK, S, E](
+class RewritableDynamoEventStorage[F[_], KK, S, E](
     tableDef: TableDefinition[KK, E, KK, S],
     runAction: DynamoDBAction ~> F,
     queryConsistency: ReadConsistency
@@ -36,7 +34,7 @@ class DynamoEventStorage[F[_], KK, S, E](
     ES: Encoder[S],
     DS: Decoder[S],
     C: Catchable[F]
-) extends EventStorage[F, KK, S, E] {
+) extends RewritableEventStorage[F, KK, S, E] {
 
   lazy val columns = EventSourceColumns(tableDef.key, tableDef.hash, tableDef.range, tableDef.value)
 
@@ -57,41 +55,11 @@ class DynamoEventStorage[F[_], KK, S, E](
   lazy val schema =
     TableDefinition.from[EID, EV, KK, S](tableDef.name, columns.eventId, columns.event, tableDef.hash, tableDef.range)
 
-  override def get(key: KK, fromSeq: Option[S]): Process[F, Event[KK, S, E]] = {
-    import Process._
-
-    def requestPage(q: table.Query): F[Page[table.R, EV]] =
-      interpret(table.query(q.config(table.Query.Config(consistency = queryConsistency))))
-
-    def loop(pt: F[Page[table.R, EV]]): Process[F, EV] =
-      await(pt) { page =>
-        emitAll(page.result) ++ {
-          page.next.fold(halt: Process[F, EV]) { seq =>
-            loop(requestPage(table.Query.range(key, seq, Comparison.Gt)))
-          }
-        }
-      }
-
-    loop {
-      requestPage {
-        fromSeq.fold {
-          table.Query.hash(key)
-        } {
-          seq => table.Query.range(key, seq, Comparison.Gt)
-        }
-      }
-    }
-  }
-
-  override def put(event: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
-    for {
-      putResult <- interpret(table.putIfAbsent(event.id, event))
-
-      r <- putResult match {
-        case Insert.New    => event.right.point[F]
-        case Insert.Failed => EventStreamError.DuplicateEvent.left[EV].point[F]
-      }
-    } yield r
+  override def unsafeRewrite(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
+    if (oldEvent.id.equals(newEvent.id))
+      rewriteEvent(oldEvent, newEvent)
+    else
+      (EventStreamError.EventIdsDoNotMatch: EventStreamError).left[Event[KK, S, E]].point[F]
 
   def rewriteEvent(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
     for {
@@ -101,13 +69,4 @@ class DynamoEventStorage[F[_], KK, S, E](
         case Replace.Failed => EventStreamError.EventNotFound.left[EV].point[F]
       }
     } yield r
-
-  def latest(key: KK): OptionT[F, Event[KK, S, E]] = {
-    def runQuery[A](q: table.Query, f: Page[S, EV] => Option[A]) =
-      OptionT(interpret(table.query(q).map(f)))
-
-    val config = table.Query.Config(direction = ScanDirection.Descending, limit = Some(1), consistency = queryConsistency)
-    val hashQuery = table.Query.hash(key, config)
-    runQuery(hashQuery, _.result.headOption)
-  }
 }
