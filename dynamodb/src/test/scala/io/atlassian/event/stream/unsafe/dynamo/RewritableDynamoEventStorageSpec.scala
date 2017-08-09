@@ -6,7 +6,7 @@ package dynamo
 import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.source.Transform
-import io.atlassian.event.stream.EventStreamError.EventNotFound
+import io.atlassian.event.stream.EventStreamError.Rejected
 import io.atlassian.event.stream.dynamo.DynamoEventStorage
 import org.joda.time.{ DateTime, DateTimeZone }
 import org.junit.runner.RunWith
@@ -92,7 +92,7 @@ class RewritableDynamoEventStorageSpec(val arguments: Arguments) extends ScalaCh
         _ <- DBEventStorage.put(oldEventChanged)
         result <- RewritableDBEventStorage.unsafeRewrite(oldEvent, newEvent)
       } yield result).unsafePerformSyncAttempt match {
-        case \/-(-\/(e)) => e === EventNotFound
+        case \/-(-\/(e)) => e === Rejected
         case _           => ko
       }
     }

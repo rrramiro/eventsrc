@@ -3,6 +3,7 @@ package io.atlassian.event.stream.unsafe.dynamo
 import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb.Write.Mode.Replace
 import io.atlassian.aws.dynamodb._
+import io.atlassian.event.Reason
 import io.atlassian.event.stream.dynamo.EventSourceColumns
 import io.atlassian.event.stream.unsafe.RewritableEventStorage
 import io.atlassian.event.stream.{ Event, EventStreamError }
@@ -59,14 +60,15 @@ class RewritableDynamoEventStorage[F[_], KK, S, E](
     if (oldEvent.id.equals(newEvent.id))
       rewriteEvent(oldEvent, newEvent)
     else
-      (EventStreamError.EventIdsDoNotMatch: EventStreamError).left[Event[KK, S, E]].point[F]
+      EventStreamError.reject(NonEmptyList(Reason("The original event changed"))).left[Event[KK, S, E]].point[F]
 
   def rewriteEvent(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
     for {
       replaceResult <- interpret(table.replace(oldEvent.id, oldEvent, newEvent))
       r <- replaceResult match {
-        case Replace.Wrote  => newEvent.right.point[F]
-        case Replace.Failed => EventStreamError.EventNotFound.left[EV].point[F]
+        case Replace.Wrote => newEvent.right.point[F]
+        case Replace.Failed =>
+          EventStreamError.reject(NonEmptyList(Reason("The supplied events didn't have matching IDs"))).left[EV].point[F]
       }
     } yield r
 }

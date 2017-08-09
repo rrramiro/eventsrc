@@ -3,7 +3,7 @@ package stream
 
 import scala.concurrent.duration._
 import scalaz.effect.LiftIO
-import scalaz.{ -\/, Contravariant, Monad, NonEmptyList, \/- }
+import scalaz.{ -\/, Contravariant, Monad, \/- }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
 
@@ -51,11 +51,9 @@ object SaveAPI {
           e => store.put(Event.next[IK, S, E](toStreamKey(key), seq, e))
         )
       } yield result match {
-        case -\/(EventStreamError.DuplicateEvent)     => SaveResult.timedOut[S](retryCount)
-        case -\/(EventStreamError.EventNotFound)      => SaveResult.reject[S](NonEmptyList(Reason("The original event changed")), retryCount)
-        case -\/(EventStreamError.EventIdsDoNotMatch) => SaveResult.reject[S](NonEmptyList(Reason("The supplied events didn't have matching IDs")), retryCount)
-        case -\/(EventStreamError.Rejected(r))        => SaveResult.reject[S](r, retryCount)
-        case \/-(event)                               => SaveResult.success[S](event.id.seq, retryCount)
+        case -\/(EventStreamError.DuplicateEvent) => SaveResult.timedOut[S](retryCount)
+        case -\/(EventStreamError.Rejected(r))    => SaveResult.reject[S](r, retryCount)
+        case \/-(event)                           => SaveResult.success[S](event.id.seq, retryCount)
       }
   }
 }
