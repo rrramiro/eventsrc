@@ -2,9 +2,8 @@ package io.atlassian.event.stream.dynamo
 
 import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
-import io.atlassian.aws.dynamodb.Write.Mode.Replace
 import io.atlassian.aws.dynamodb._
-import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError }
+import io.atlassian.event.stream.{ Event, EventId, EventStorage, EventStreamError }
 import org.joda.time.DateTime
 
 import scalaz._
@@ -90,15 +89,6 @@ class DynamoEventStorage[F[_], KK, S, E](
       r <- putResult match {
         case Insert.New    => event.right.point[F]
         case Insert.Failed => EventStreamError.DuplicateEvent.left[EV].point[F]
-      }
-    } yield r
-
-  def rewriteEvent(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]): F[EventStreamError \/ Event[KK, S, E]] =
-    for {
-      replaceResult <- interpret(table.replace(oldEvent.id, oldEvent, newEvent))
-      r <- replaceResult match {
-        case Replace.Wrote  => newEvent.right.point[F]
-        case Replace.Failed => EventStreamError.EventNotFound.left[EV].point[F]
       }
     } yield r
 

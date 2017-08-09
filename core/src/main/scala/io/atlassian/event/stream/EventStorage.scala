@@ -3,6 +3,7 @@ package stream
 
 import scalaz.{ Functor, InvariantFunctor, Monad, OptionT, Order, Semigroup, \/ }
 import scalaz.stream.{ Process, Tee, tee }
+import scalaz.syntax.bifunctor._
 import scalaz.syntax.applicative._
 import scalaz.syntax.order._
 

@@ -1,14 +1,11 @@
 package io.atlassian.event.stream.memory
 
-import java.security.cert.CertPathValidatorException.Reason
-
 import io.atlassian.event.Sequence
 import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError }
 
-import scalaz.{ NonEmptyList, OptionT, \/ }
+import scalaz.{ \/, OptionT }
 import scalaz.concurrent.Task
 import scalaz.stream.Process
-import scalaz.syntax.applicative._
 import scalaz.syntax.either._
 import scalaz.syntax.order._
 

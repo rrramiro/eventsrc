@@ -2,7 +2,7 @@ package io.atlassian.event
 package stream
 package dynamo
 
-import EventStreamError.{ DuplicateEvent, EventNotFound }
+import EventStreamError.DuplicateEvent
 import source.Transform
 import io.atlassian.aws.WrappedInvalidException
 import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
