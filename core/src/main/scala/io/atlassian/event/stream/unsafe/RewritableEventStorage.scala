@@ -14,7 +14,7 @@ trait RewritableEventStorage[F[_], K, S, E] {
   /**
    * Rewrite `oldEvent` to `newEvent`.
    *
-   * The keys should match.
+   * The keys must match. If they do not, then you'll get back an error.
    *
    * @return Either an Error or the event that was saved. Other non-specific errors should be available
    *         through the container F.
