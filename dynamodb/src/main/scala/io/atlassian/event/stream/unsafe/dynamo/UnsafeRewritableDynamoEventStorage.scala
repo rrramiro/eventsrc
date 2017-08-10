@@ -5,7 +5,7 @@ import io.atlassian.aws.dynamodb.Write.Mode.Replace
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.Reason
 import io.atlassian.event.stream.dynamo.EventSourceColumns
-import io.atlassian.event.stream.unsafe.RewritableEventStorage
+import io.atlassian.event.stream.unsafe.UnsafeRewritableEventStorage
 import io.atlassian.event.stream.{ Event, EventStreamError }
 
 import scalaz._
@@ -23,7 +23,7 @@ import scalaz.syntax.monad._
  *
  * @tparam F Container around operations on an underlying data store e.g. Task.
  */
-class RewritableDynamoEventStorage[F[_], KK, S, E](
+class UnsafeRewritableDynamoEventStorage[F[_], KK, S, E](
     tableDef: TableDefinition[KK, E, KK, S],
     runAction: DynamoDBAction ~> F,
     queryConsistency: ReadConsistency
@@ -35,7 +35,7 @@ class RewritableDynamoEventStorage[F[_], KK, S, E](
     ES: Encoder[S],
     DS: Decoder[S],
     C: Catchable[F]
-) extends RewritableEventStorage[F, KK, S, E] {
+) extends UnsafeRewritableEventStorage[F, KK, S, E] {
 
   lazy val columns = EventSourceColumns(tableDef.key, tableDef.hash, tableDef.range, tableDef.value)
 

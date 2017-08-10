@@ -10,7 +10,7 @@ import scalaz.\/
  * This should not be used in the general case. Rewriting events violates the immutability of the stream and introduces
  * significant complication.
  */
-trait RewritableEventStorage[F[_], K, S, E] {
+trait UnsafeRewritableEventStorage[F[_], K, S, E] {
   /**
    * Rewrite `oldEvent` to `newEvent`.
    *

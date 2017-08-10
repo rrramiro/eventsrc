@@ -21,7 +21,7 @@ import scalaz.std.option._
 import scalaz.std.list._
 
 @RunWith(classOf[org.specs2.runner.JUnitRunner])
-class RewritableDynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec with LocalDynamoDB with DynamoDBActionMatchers {
+class UnsafeRewritableDynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec with LocalDynamoDB with DynamoDBActionMatchers {
 
   type KK = String
   type S = Long
@@ -54,7 +54,7 @@ class RewritableDynamoEventStorageSpec(val arguments: Arguments) extends ScalaCh
 
   lazy val runner = TaskTransformation.runner(DYNAMO_CLIENT)
 
-  object RewritableDBEventStorage extends RewritableDynamoEventStorage[Task, KK, S, E](DynamoMappings.tableDefinition, runner, ReadConsistency.Eventual)
+  object UnsafeRewritableDBEventStorage$ extends UnsafeRewritableDynamoEventStorage[Task, KK, S, E](DynamoMappings.tableDefinition, runner, ReadConsistency.Eventual)
   object DBEventStorage extends DynamoEventStorage[Task, KK, S, E](DynamoMappings.tableDefinition, runner, ReadConsistency.Eventual)
 
   implicit val JodaDateTimeEqual: Equal[DateTime] =
@@ -90,7 +90,7 @@ class RewritableDynamoEventStorageSpec(val arguments: Arguments) extends ScalaCh
       val newEvent = Event(eventId, seq, Transform.insert(newValue))
       (for {
         _ <- DBEventStorage.put(oldEventChanged)
-        result <- RewritableDBEventStorage.unsafeRewrite(oldEvent, newEvent)
+        result <- UnsafeRewritableDBEventStorage$.unsafeRewrite(oldEvent, newEvent)
       } yield result).unsafePerformSyncAttempt match {
         case \/-(-\/(e)) => e === Rejected
         case _           => ko
