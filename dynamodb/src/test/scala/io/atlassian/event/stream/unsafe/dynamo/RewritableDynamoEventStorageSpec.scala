@@ -42,9 +42,9 @@ class RewritableDynamoEventStorageSpec(val arguments: Arguments) extends ScalaCh
       case Transform.Insert(v) => (Transform.Op.Insert, Some(v))
     } {
       case (Transform.Op.Insert, Some(v)) => Transform.Insert(v)
-      case (Transform.Op.Delete, None)    => Transform.delete
-      case (Transform.Op.Delete, Some(v)) => Transform.delete // This shouldn't happen because the delete shouldn't have any data
       case (Transform.Op.Insert, None)    => ??? // shouldn't happen
+      case (Transform.Op.Delete, None)    => ??? // We shouldn't ever be deleting things
+      case (Transform.Op.Delete, Some(v)) => ??? // This shouldn't happen because the delete shouldn't have any data
     }
 
     lazy val tableDefinition =
