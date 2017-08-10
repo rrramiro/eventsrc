@@ -72,7 +72,7 @@ class RewritableDynamoEventStorageSpec(val arguments: Arguments) extends ScalaCh
     else 10
 
   def is = stopOnFail ^ s2"""
-    This is a specification to check the DynamoDB event storage
+    This is a specification to check the unsafe RewritableDynamoEventStorage
 
     DynamoEventStorage should                            ${step(startLocalDynamoDB)} ${step(createTestTable)}
        return an eror when events have changed           ${eventReturnsErrorForEventChanged.set(minTestsOk = NUM_TESTS)}
