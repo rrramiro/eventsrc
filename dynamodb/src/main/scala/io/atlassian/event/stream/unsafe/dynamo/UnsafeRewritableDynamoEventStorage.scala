@@ -4,6 +4,7 @@ import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb.Write.Mode.Replace
 import io.atlassian.aws.dynamodb._
 import io.atlassian.event.Reason
+import DynamoDBAction._
 import io.atlassian.event.stream.dynamo.EventSourceColumns
 import io.atlassian.event.stream.unsafe.UnsafeRewritableEventStorage
 import io.atlassian.event.stream.{ Event, EventStreamError }
