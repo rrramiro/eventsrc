@@ -91,7 +91,7 @@ class UnsafeRewritableDynamoEventStorageSpec(val arguments: Arguments) extends S
       (for {
         _ <- DBEventStorage.put(oldEventChanged)
         result <- UnsafeRewritableDBEventStorage$.unsafeRewrite(oldEvent, newEvent)
-      } yield result).unsafePerformSyncAttempt match {
+      } yield result).attemptRun match {
         case \/-(-\/(e)) => e === Rejected
         case _           => ko
       }
