@@ -1,4 +1,0 @@
-pipeline:
-    - job:
-        script:
-            - ./sbt +test:compile +core/test
