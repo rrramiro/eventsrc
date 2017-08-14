@@ -16,9 +16,9 @@ import sbt._
 import Keys._
 
 object Publishing extends Plugin {
-  val nexus = "https://maven.atlassian.com/"
-  lazy val release = Some("releases" at nexus + "public")
-  lazy val snapshots = Some("snapshots" at nexus + "public-snapshot")
+  val artifactory = "https://packages.atlassian.com/"
+  lazy val release = Some("releases" at artifactory + "maven/public")
+  lazy val snapshots = Some("snapshots" at artifactory + "maven/public-snapshot")
   lazy val local = Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
 
   override def settings = 
