@@ -1,8 +1,8 @@
 package io.atlassian.event.stream.dynamo
 
+import io.atlassian.aws.dynamodb.DynamoDBAction._
 import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
 import io.atlassian.aws.dynamodb.{ Comparison, Decoder, DynamoDB, DynamoDBAction, Encoder, Page, ScanDirection, Table, TableDefinition, Write }
-import DynamoDBAction._
 import io.atlassian.aws.dynamodb.Write.Mode.Insert
 import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError }
 
