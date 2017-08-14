@@ -8,7 +8,7 @@ object Dependencies {
     val scalazStream  = "0.8"
     val monocle       = "1.2.2"
     val argonaut      = "6.1a"
-    val awsScala      = "7.0.0"
+    val awsScala      = "7.0.6"
     val kadai         = "5.0.0"
     val specs2        = "3.8.3"
     val scalacheck    = "1.13.1"
