@@ -9,8 +9,8 @@ pipelines:
   default:
     - step:
         caches:
-            - sbt
+          - sbt
         script: # Modify the commands below to build your repository.
-            - sbt +test:compile
-            - sbt +core/test
-            - sbt +dynamodb/test
+          - sbt +test:compile
+          - sbt +core/test
+          - sbt +dynamodb/test
