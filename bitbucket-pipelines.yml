@@ -10,7 +10,12 @@ pipelines:
     - step:
         caches:
           - sbt
+          - localdynamodb
         script: # Modify the commands below to build your repository.
           - sbt +test:compile
           - sbt +core/test
           - sbt +dynamodb/test
+
+definitions:
+  caches:
+    localdynamodb: ~/target/dynamodb/DynamoDBLocal.jar
