@@ -4,6 +4,7 @@ import io.atlassian.event.stream.{ Event, EventStreamError }
 
 import scalaz.{ Functor, \/ }
 import scalaz.syntax.functor._
+import scalaz.syntax.bifunctor._
 
 /**
  * A rewritable source of events.
@@ -26,10 +27,10 @@ trait UnsafeRewritableEventStorage[F[_], K, S, E] { self =>
   def mapKS[KK, SS](k: KK => K, kk: K => KK, s: SS => S, ss: S => SS)(implicit F: Functor[F]) =
     // TODO: Monocle would clean this up a bit.
     new UnsafeRewritableEventStorage[F, KK, SS, E] {
-      val updateKey: Event[K, S, E] => Event[KK, SS, E] =
-        _.bimap(kk, ss)
+      def updateKey(event: Event[K, S, E]) =
+        event.updateId(_.bimap(kk, ss))
 
       override def unsafeRewrite(oldEvent: Event[KK, SS, E], newEvent: Event[KK, SS, E]): F[\/[EventStreamError, Event[KK, SS, E]]] =
-        self.unsafeRewrite(oldEvent.bimap(k, s), newEvent.bimap(k, s)).map { _.map { updateKey } }
+        self.unsafeRewrite(oldEvent.updateId(_.bimap(k, s)), newEvent.updateId(_.bimap(k, s))).map { _.map { updateKey } }
     }
 }
