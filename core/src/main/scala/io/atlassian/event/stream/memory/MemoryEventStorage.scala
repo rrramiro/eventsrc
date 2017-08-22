@@ -18,6 +18,12 @@ object MemoryEventStorage {
   type Stream[KK, S, E] = List[Event[KK, S, E]]
   type Storage[KK, S, E] = TrieMap[KK, Stream[KK, S, E]]
 
+  /**
+   * Build an in-memory store implementation.
+   *
+   * @param map The state of the stream. It will use a blank state if left empty.
+   * @return An in-memory EventStorage
+   */
   def apply[KK, S: Sequence, E](map: Storage[KK, S, E] = TrieMap[KK, List[Event[KK, S, E]]]()) = Task.delay {
 
     new EventStorage[Task, KK, S, E] {
