@@ -3,6 +3,8 @@ package event
 package stream
 package unsafe
 
+import io.atlassian.event.stream.memory.MemoryEventStorage.{ Storage, Stream => EventStream }
+
 import scala.collection.concurrent.TrieMap
 import scalaz.{ -\/, Equal, NonEmptyList, \/, \/- }
 import scalaz.concurrent.Task
@@ -14,9 +16,6 @@ import scalaz.syntax.equal._
 trait UnsafeRewritableInMemoryEventStorage[KK, S, E] extends UnsafeRewritableEventStorage[Task, KK, S, E]
 
 object UnsafeRewritableInMemoryEventStorage {
-  type Stream[KK, S, E] = List[Event[KK, S, E]]
-  type Storage[KK, S, E] = TrieMap[KK, Stream[KK, S, E]]
-
   def apply[KK, S: Sequence, E](store: Storage[KK, S, E]): UnsafeRewritableInMemoryEventStorage[KK, S, E] =
     new UnsafeRewritableInMemoryEventStorage[KK, S, E] {
       override def unsafeRewrite(oldEvent: Event[KK, S, E], newEvent: Event[KK, S, E]): Task[\/[EventStreamError, Event[KK, S, E]]] =
@@ -43,7 +42,7 @@ object UnsafeRewritableInMemoryEventStorage {
    * @param newEvent The event to sub in
    * @return The final list of events
    */
-  private def replaceOrError[KK, S: Equal, E](events: Stream[KK, S, E], newEvent: Event[KK, S, E]): \/[EventStreamError, Stream[KK, S, E]] =
+  private def replaceOrError[KK, S: Equal, E](events: EventStream[KK, S, E], newEvent: Event[KK, S, E]): \/[EventStreamError, EventStream[KK, S, E]] =
     events.span(_.id.seq /== newEvent.id.seq) match {
       case (a, Nil) => -\/(EventStreamError.reject(NonEmptyList(Reason("Seq doesn't exist in userbase"))))
       case (a, b)   => \/-(a ++ (newEvent :: b.tail))
