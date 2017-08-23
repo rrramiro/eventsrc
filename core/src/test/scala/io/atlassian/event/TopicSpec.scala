@@ -26,7 +26,7 @@ class TopicSpec extends ScalaCheckSpec {
 
   val concurrentSubscribe = Prop.forAll { (xs: List[String]) =>
     (for {
-      es <- MemoryEventStorage[Char, Long, String]()
+      es <- MemoryEventStorage.empty[Char, Long, String]
       key = 'a'
       p = Topic[Task].atEnd(es.get(key, _: Option[Long]))
       ys <- Task.gatherUnordered(

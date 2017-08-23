@@ -24,7 +24,7 @@ object MemoryEventStorage {
    * @param map The state of the stream. It will use a blank state if left empty.
    * @return An in-memory EventStorage
    */
-  def apply[KK, S: Sequence, E](map: Storage[KK, S, E] = TrieMap[KK, List[Event[KK, S, E]]]()) = Task.delay {
+  def apply[KK, S: Sequence, E](map: Storage[KK, S, E]) = Task.delay {
 
     new EventStorage[Task, KK, S, E] {
       override def get(key: KK, fromOption: Option[S]): Process[Task, Event[KK, S, E]] = {
@@ -57,4 +57,6 @@ object MemoryEventStorage {
         })
     }
   }
+
+  def empty[KK, S: Sequence, E] = apply(TrieMap[KK, List[Event[KK, S, E]]]())
 }
