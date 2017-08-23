@@ -19,6 +19,7 @@ class UnsafeRewritableInMemoryEventStorageSpec extends ScalaCheckSpec with Disju
 
          Can rewrite an event        ${canRewriteASingleEvent[Boolean, Long, String]}
          Will only rewrite one event ${onlyRewritesOneEvent[Boolean, Long, String]}
+         Will fail on bad seq #      ${failsWritingNonExistentSeq[Boolean, Long, String]}
     """
 
   def canRewriteASingleEvent[KK: Equal: Arbitrary, S: Sequence: Arbitrary, E: Equal: Arbitrary] =
@@ -41,5 +42,17 @@ class UnsafeRewritableInMemoryEventStorageSpec extends ScalaCheckSpec with Disju
       val result = UnsafeRewritableInMemoryEventStorage(storage).unsafeRewrite(event1, rewritten).run
 
       result must be_\/-(rewritten) and (storage.get(event1.id.key) must beSome(List(rewritten, event2)))
+    }
+
+  def failsWritingNonExistentSeq[KK: Equal: Arbitrary, S: Sequence: Arbitrary, E: Equal: Arbitrary] =
+    Prop.forAll { (op1: TestEvent[KK, S, E], op2: E, newOperation: E) =>
+      val event1 = op1.event
+      val event2 = op1.event.copy(id = EventId.next(op1.event.id), operation = op2)
+      val rewritten = op1.event.copy(id = EventId.next(event2.id), operation = newOperation)
+
+      val storage = TrieMap[KK, List[Event[KK, S, E]]](event1.id.key -> List(event1, event2))
+      val result = UnsafeRewritableInMemoryEventStorage(storage).unsafeRewrite(event1, rewritten).run
+
+      result must be_-\/ and (storage.get(event1.id.key) must beSome(List(event1, event2)))
     }
 }
