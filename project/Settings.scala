@@ -36,6 +36,7 @@ object Settings {
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom
     , scalaVersion := "2.11.11"
     , autoScalaLibrary := false
+    , ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
     , scalacOptions ++= scalacFlags
     , javacOptions ++= Seq("-encoding", "UTF-8")
     , resolvers ++= Seq(
