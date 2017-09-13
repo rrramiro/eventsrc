@@ -2,15 +2,14 @@ package io.atlassian.event
 package stream
 package dynamo
 
-import io.atlassian.aws.WrappedInvalidException
 import io.atlassian.aws.dynamodb.DynamoDB.ReadConsistency
-import io.atlassian.aws.dynamodb._
+import io.atlassian.aws.dynamodb.{ Column, DynamoDBAction, DynamoDBActionMatchers, DynamoDBOps, LocalDynamoDB, TableDefinition }
 import io.atlassian.event.stream.memory.MemorySingleSnapshotStorage
 import org.specs2.main.Arguments
 
-import scalaz._
 import scalaz.concurrent.Task
 import scalaz.syntax.applicative._
+import scalaz.~>
 
 class DynamoSingleStreamExampleSpec(val arguments: Arguments) extends SingleStreamExampleSpec with LocalDynamoDB with DynamoDBActionMatchers {
   override def is =

@@ -128,7 +128,7 @@ object UserAccountExample {
     val saveAndGetUser: Task[Option[User]] =
       for {
         // 1. Instantiate a stream with an EventStorage
-        eventStore <- MemoryEventStorage[CompanyId, Long, UserAccountEvent]
+        eventStore <- MemoryEventStorage.empty[CompanyId, Long, UserAccountEvent]
 
         // 2. Create QueryAPIs defined for stream
         // Just use some in-memory snapshot storage for this example

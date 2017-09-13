@@ -1,11 +1,12 @@
 package io.atlassian.event
 package stream
 
-import argonaut._, Argonaut._
+import argonaut._
+import Argonaut._
 import org.scalacheck.Arbitrary._
-import org.scalacheck.{ Gen, Arbitrary }
+import org.scalacheck.{ Arbitrary, Gen }
 
-import scalaz.{ \/, NaturalTransformation }
+import scalaz.\/
 import scalaz.concurrent.Task
 import scalaz.syntax.either._
 import scalaz.syntax.std.option._
@@ -32,7 +33,6 @@ object DirectoryEventStream {
   type DirectoryUsernamePrefix = (DirectoryId, String)
 
   object ops {
-    import scalaz.syntax.std.option._
     import Operation.syntax._
 
     def addUser(u: User): Operation[TwoPartSequence[Long], DirectoryEvent] =

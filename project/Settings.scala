@@ -44,7 +44,7 @@ object Settings {
     , resolvers ++= Seq(
         Resolver.defaultLocal
       , Resolver.mavenLocal
-      , "atlassian-public"   at "https://maven.atlassian.com/content/groups/public/"
+      , "atlassian-public"   at "https://packages.atlassian.com/maven/repository/public/"
       , Resolver.sonatypeRepo("public")
       , Resolver.sonatypeRepo("releases")
       , Resolver.sonatypeRepo("snapshots")
@@ -56,7 +56,7 @@ object Settings {
       )
     , credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
     , addCompilerPlugin("org.scalamacros"   % "paradise"         % "2.1.0" cross CrossVersion.full)
-    , addCompilerPlugin("org.spire-math"    % "kind-projector"   % "0.8.1" cross CrossVersion.binary)
+    , addCompilerPlugin("org.spire-math"    % "kind-projector"   % "0.9.3" cross CrossVersion.binary)
     , addCompilerPlugin("com.milessabin"    % "si2712fix-plugin" % "1.2.0" cross CrossVersion.full)
     )
 

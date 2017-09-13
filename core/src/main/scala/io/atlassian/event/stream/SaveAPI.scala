@@ -3,17 +3,15 @@ package stream
 
 import scala.concurrent.duration._
 import scalaz.effect.LiftIO
-import scalaz.{ -\/, Contravariant, Monad, \/- }
-import scalaz.syntax.either._
-import scalaz.syntax.monad._
+import scalaz.{ \/, EitherT, Functor, Monad, NonEmptyList }
+import scalaz.std.tuple._
+import scalaz.syntax.all._
 
-case class SaveAPIConfig[F[_]](retry: RetryStrategy[F])
+trait SaveAPI[F[_], KK, E, K, S] {
+  final def save(key: K, op: Operation[S, E])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] =
+    batch(key, NonEmptyList(op))
 
-object SaveAPIConfig {
-  def default[F[_]: Monad: LiftIO] =
-    SaveAPIConfig(RetryStrategy.retryIntervals(
-      RetryInterval.fullJitter(20, 5.millis, 2.0), Delays.sleep
-    ))
+  def batch(key: K, ops: NonEmptyList[Operation[S, E]])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]]
 }
 
 sealed trait SaveAPI[F[_], K, S, E] { self =>
@@ -54,6 +52,50 @@ object SaveAPI {
         case -\/(EventStreamError.DuplicateEvent) => SaveResult.timedOut[S](retryCount)
         case -\/(EventStreamError.Rejected(r))    => SaveResult.reject[S](r, retryCount)
         case \/-(event)                           => SaveResult.success[S](event.id.seq, retryCount)
+      }
+
+      type UnprocessedResult = (SaveResult[S], NonEmptyList[Operation[S, E]])
+      type PartialResult = UnprocessedResult \/ SaveResult[S]
+
+      override def batch(key: K, initialOps: NonEmptyList[Operation[S, E]])(implicit F: Monad[F], S: Sequence[S]): F[SaveResult[S]] = {
+        def go(ops: Option[PartialResult], retryCount: Int): F[PartialResult] =
+          latestSeq(key).flatMap { latest =>
+            storeOperations(store, toStreamKey(key), latest.getOrElse(Sequence[S].first), ops.flatMap(unprocessedOps).getOrElse(initialOps), retryCount)
+          }
+
+        def latestSeq(key: K)(implicit F: Functor[F]): F[Option[S]] =
+          store.latest(toStreamKey(key)).map { _.id.seq }.run
+
+        def partialSaveResult[A](p: PartialResult): SaveResult[S] =
+          p.fold(_._1, identity)
+
+        def unprocessedOps(p: PartialResult): Option[NonEmptyList[Operation[S, E]]] =
+          p.fold(a => Some(a._2), _ => None)
+
+        def storeOperations(store: EventStorage[F, KK, S, E], key: KK, s: S, ops: NonEmptyList[Operation[S, E]], retryCount: Int): F[PartialResult] = {
+          def handleOperationResult[A](a: Operation.Result[A]): EitherT[F, UnprocessedResult, A] =
+            EitherT(a.toDisjunction.point[F]).leftMap(a => (SaveResult.reject[S](a, retryCount), ops))
+
+          def toUnprocessedResult[A](u: (SaveResult[S], NonEmptyList[(Operation[S, E], A)])): UnprocessedResult =
+            u.rightMap(_.map(_._1))
+
+          val program =
+            for {
+              enumerated <- LiftIO[EitherT[F, UnprocessedResult, ?]].liftIO(Operation.enumerate(key, s, ops))
+              events <- handleOperationResult(enumerated)
+              result <- untilFirstLeft[NonEmptyList, F, (Operation[S, E], Event[KK, S, E]), SaveResult[S], SaveResult[S]](ops.zip(events), {
+                case (_, event) =>
+                  EitherT(store.put(event)).bimap(
+                    SaveResult.fromEventStreamError(retryCount),
+                    e => SaveResult.success(e.id.seq, retryCount)
+                  )
+              }).bimap(toUnprocessedResult, _.last)
+            } yield result
+
+          program.run
+        }
+
+        Retry[F, PartialResult](go, config.retry, partialSaveResult(_).canRetry).map(partialSaveResult)
       }
   }
 }

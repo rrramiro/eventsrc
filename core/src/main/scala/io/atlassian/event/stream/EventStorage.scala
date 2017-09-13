@@ -1,7 +1,7 @@
 package io.atlassian.event
 package stream
 
-import scalaz.{ Functor, InvariantFunctor, Monad, OptionT, Order, Semigroup, \/ }
+import scalaz.{ Foldable, Functor, InvariantFunctor, Monad, OptionT, Order, Semigroup, Traverse, \/ }
 import scalaz.stream.{ Process, Tee, tee }
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.applicative._
@@ -49,7 +49,7 @@ trait EventStorage[F[_], K, S, E] { self =>
         self.get(k(key), fromSeq.map{ s }).map { updateKey }
 
       def put(event: Event[KK, SS, E]) =
-        self.put(event.bimap(k, s)).map { _.map { updateKey } }
+        self.put { event.updateId(_.bimap(k, s)) }.map { _.map(updateKey) }
 
       def latest(key: KK) =
         self.latest(k(key)).map { updateKey }
@@ -70,7 +70,7 @@ object EventStorage {
   //     forall a. a |+| a = a
   implicit def EventStorageSemigroup[F[_]: Monad, K, S: Order, E]: Semigroup[EventStorage[F, K, S, E]] =
     new Semigroup[EventStorage[F, K, S, E]] {
-      def append(primary: EventStorage[F, K, S, E], secondary: => EventStorage[F, K, S, E]): EventStorage[F, K, S, E] =
+      override def append(primary: EventStorage[F, K, S, E], secondary: => EventStorage[F, K, S, E]): EventStorage[F, K, S, E] =
         new EventStorage[F, K, S, E] {
           private type EventTee = Tee[Event[K, S, E], Event[K, S, E], Event[K, S, E]]
 
@@ -108,16 +108,16 @@ object EventStorage {
                   Process.emit(rightE).append(merge(Some(rightE.id.seq), left, None))
             }
 
-          def get(key: K, fromSeq: Option[S]): Process[F, Event[K, S, E]] = {
+          override def get(key: K, fromSeq: Option[S]): Process[F, Event[K, S, E]] = {
             val primaryGet = primary.get(key, fromSeq)
             val secondaryGet = secondary.get(key, fromSeq)
             primaryGet.tee(secondaryGet)(merge(None, None, None))
           }
 
-          def latest(key: K): OptionT[F, Event[K, S, E]] =
+          override def latest(key: K): OptionT[F, Event[K, S, E]] =
             (primary.latest(key) |@| secondary.latest(key))(maxBy[Event[K, S, E], S](_.id.seq))
 
-          def put(event: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]] =
+          override def put(event: Event[K, S, E]): F[EventStreamError \/ Event[K, S, E]] =
             primary.put(event)
         }
     }

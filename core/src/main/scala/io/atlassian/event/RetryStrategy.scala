@@ -8,15 +8,16 @@ import scalaz.syntax.monad._
 import scalaz.syntax.std.option._
 
 trait RetryStrategy[F[_]] {
-  def tryRun[X](a: F[X], retriable: X => Boolean): F[RetryStrategy[F] \/ X]
+  def apply[X](a: F[X], retriable: X => Boolean): F[RetryStrategy[F] \/ X]
 }
 
 object RetryStrategy {
+
   def durationList[F[_]: Monad: LiftIO](tries: List[Duration], delay: Duration => IO[Unit]): RetryStrategy[F] =
     new RetryStrategy[F] {
-      def tryRun[A](fa: F[A], retriable: A => Boolean): F[RetryStrategy[F] \/ A] =
+      def apply[A](fa: F[A], retryable: A => Boolean): F[RetryStrategy[F] \/ A] =
         fa >>= { a =>
-          if (!retriable(a)) a.right[RetryStrategy[F]].point[F]
+          if (!retryable(a)) a.right[RetryStrategy[F]].point[F]
           else tries match {
             case d :: ds => LiftIO[F].liftIO {
               delay(d)
@@ -28,9 +29,9 @@ object RetryStrategy {
 
   def retryIntervals[F[_]: Monad: LiftIO](tries: RetryInterval, delay: Duration => IO[Unit]): RetryStrategy[F] =
     new RetryStrategy[F] {
-      def tryRun[A](fa: F[A], retriable: A => Boolean): F[RetryStrategy[F] \/ A] =
+      def apply[A](fa: F[A], retryable: A => Boolean): F[RetryStrategy[F] \/ A] =
         fa >>= { a =>
-          if (!retriable(a)) a.right[RetryStrategy[F]].point[F]
+          if (!retryable(a)) a.right[RetryStrategy[F]].point[F]
           else LiftIO[F].liftIO {
             tries.next >>= {
               _.some {

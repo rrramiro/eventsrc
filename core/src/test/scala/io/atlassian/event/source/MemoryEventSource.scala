@@ -2,6 +2,7 @@ package io.atlassian.event
 package source
 
 import scalaz.{ Catchable, Monad, \/ }
+import scalaz.effect.IO
 import scalaz.std.option._
 import scalaz.syntax.either._
 import scalaz.syntax.std.option._
@@ -18,6 +19,7 @@ class MemoryEventSource extends LongSequencedEventSource[Int, String] {
 
   object api extends API[Task] {
     val M = Monad[Task]
+    val L = TaskLiftIO
     val C = Catchable[Task]
 
     object store extends Storage[Task] {
