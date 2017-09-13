@@ -2,7 +2,7 @@ package io.atlassian.event
 
 import org.scalacheck.{ Gen, Prop }
 
-import scalaz.{ \/, -\/, EitherT, NonEmptyList, State, Value }
+import scalaz.{ \/, -\/, EitherT, NonEmptyList, IList, State, Value }
 import scalaz.syntax.traverse._
 
 class UntilFirstLeftSpec extends ScalaCheckSpec {
@@ -24,7 +24,7 @@ class UntilFirstLeftSpec extends ScalaCheckSpec {
     for {
       a <- g
       l <- Gen.listOf(g)
-    } yield NonEmptyList.nel(a, l)
+    } yield NonEmptyList.nel(a, IList.fromList(l))
 
   def genLeft[A, B](g: Gen[A]): Gen[A \/ B] =
     g.map(\/.left)

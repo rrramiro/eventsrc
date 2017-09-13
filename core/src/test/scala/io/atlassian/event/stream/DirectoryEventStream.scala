@@ -121,7 +121,7 @@ object DirectoryEventStream {
     allUsersQueryAPI(eventStore, SnapshotStorage.none)
 
   def allUsersSaveAPI[K, S: Sequence, E](eventStore: EventStorage[Task, K, S, E]): SaveAPI[Task, K, S, E] =
-    SaveAPI[Task, K, S, E](eventStore)
+    SaveAPI[Task, K, S, E](SaveAPIConfig.default, eventStore)
 }
 
 import DirectoryEventStream.{ UserId, Username }

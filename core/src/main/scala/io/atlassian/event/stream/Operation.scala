@@ -11,7 +11,9 @@ import scalaz.std.option._
  * to an aggregate type.
  * @param apply Function from a sequence to an operation that should occur (i.e. should we save the event or reject it)
  */
-case class Operation[S, A](apply: Option[S] => Operation.Result[A])
+case class Operation[S, A](run: S => Operation.Result[A]) {
+  def apply(op: S): Operation.Result[A] = run(op)
+}
 
 object Operation {
   def insert[S, A](e: A): Operation[S, A] =
@@ -19,7 +21,7 @@ object Operation {
 
   def ifSeq[S: Equal, A](seq: S, a: A): Operation[S, A] =
     Operation { oseq =>
-      if (oseq === Some(seq)) Result.success(a)
+      if (oseq === seq) Result.success(a)
       else Result.reject(Reason(s"Mismatched event stream sequence number: $oseq does not match expected $seq").wrapNel)
     }
 
@@ -60,7 +62,7 @@ object Operation {
         case Reject(r)  => reject(r)
       }
 
-    def toDisjunction: NonEmptyList[Reason] \/ E =
+    def toDisjunction: NonEmptyList[Reason] \/ A =
       fold(_.left, _.right)
   }
 

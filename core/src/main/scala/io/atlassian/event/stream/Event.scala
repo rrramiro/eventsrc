@@ -5,6 +5,7 @@ import monocle.macros.PLenses
 import org.joda.time.DateTime
 import scalaz.{ Equal, Functor, Ordering }
 import scalaz.effect.IO
+import scalaz.syntax.bifunctor._
 import scalaz.syntax.equal._
 
 /**

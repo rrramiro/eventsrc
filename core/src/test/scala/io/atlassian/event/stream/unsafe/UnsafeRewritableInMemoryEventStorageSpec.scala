@@ -27,7 +27,7 @@ class UnsafeRewritableInMemoryEventStorageSpec extends ScalaCheckSpec with Disju
       val oldEvent = oldTestEvent.event
       val newEvent = oldEvent.copy(operation = newOperation)
       val storage = TrieMap[KK, List[Event[KK, S, E]]](oldEvent.id.key -> List(oldEvent))
-      val result = UnsafeRewritableInMemoryEventStorage(storage).unsafeRewrite(oldEvent, newEvent).run
+      val result = UnsafeRewritableInMemoryEventStorage(storage).unsafeRewrite(oldEvent, newEvent).unsafePerformSync
 
       result must be_\/-(newEvent) and (storage.get(oldEvent.id.key) must beSome(List(newEvent)))
     }
@@ -39,7 +39,7 @@ class UnsafeRewritableInMemoryEventStorageSpec extends ScalaCheckSpec with Disju
       val rewritten = op1.event.copy(operation = newOperation)
 
       val storage = TrieMap[KK, List[Event[KK, S, E]]](event1.id.key -> List(event1, event2))
-      val result = UnsafeRewritableInMemoryEventStorage(storage).unsafeRewrite(event1, rewritten).run
+      val result = UnsafeRewritableInMemoryEventStorage(storage).unsafeRewrite(event1, rewritten).unsafePerformSync
 
       result must be_\/-(rewritten) and (storage.get(event1.id.key) must beSome(List(rewritten, event2)))
     }
@@ -51,7 +51,7 @@ class UnsafeRewritableInMemoryEventStorageSpec extends ScalaCheckSpec with Disju
       val rewritten = op1.event.copy(id = EventId.next(event2.id), operation = newOperation)
 
       val storage = TrieMap[KK, List[Event[KK, S, E]]](event1.id.key -> List(event1, event2))
-      val result = UnsafeRewritableInMemoryEventStorage(storage).unsafeRewrite(event1, rewritten).run
+      val result = UnsafeRewritableInMemoryEventStorage(storage).unsafeRewrite(event1, rewritten).unsafePerformSync
 
       result must be_-\/ and (storage.get(event1.id.key) must beSome(List(event1, event2)))
     }
