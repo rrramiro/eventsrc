@@ -34,11 +34,8 @@ object Settings {
     Seq[Def.Setting[_]] (
       organization := "io.atlassian"
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom
-    , scalaVersion := "2.11.8"
-    , crossScalaVersions  := Seq("2.11.8", "2.10.6")
-    , ReleaseKeys.crossBuild := true
+    , scalaVersion := "2.11.11"
     , autoScalaLibrary := false
-    , ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
     , scalacOptions ++= scalacFlags
     , javacOptions ++= Seq("-encoding", "UTF-8")
     , resolvers ++= Seq(
@@ -55,9 +52,8 @@ object Settings {
         file("LICENSE") -> "META-INF/LICENSE"
       )
     , credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
-    , addCompilerPlugin("org.scalamacros"   % "paradise"         % "2.1.0" cross CrossVersion.full)
-    , addCompilerPlugin("org.spire-math"    % "kind-projector"   % "0.9.3" cross CrossVersion.binary)
-    , addCompilerPlugin("com.milessabin"    % "si2712fix-plugin" % "1.2.0" cross CrossVersion.full)
+    , addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.4" cross CrossVersion.binary)
+    , addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full)
     )
 
   lazy val scalariformPrefs = {

@@ -18,10 +18,4 @@ import sbtrelease.ReleasePlugin._
 object Build extends sbt.Build with Modules {
   // "-language:_"
   //   Seq( "-Xlog-free-terms")
-
-  lazy val paradisePlugin = 
-    Seq(
-      compilerPlugin("org.scalamacros" %% "paradise"    % "2.0.1" cross CrossVersion.full)
-    , "org.scalamacros" %% "quasiquotes" % "2.0.1"
-    )
 }
