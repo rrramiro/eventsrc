@@ -3,8 +3,8 @@ package stream
 
 import monocle.macros.PLenses
 import org.joda.time.DateTime
-
 import scalaz.{ Equal, Functor, Ordering }
+import scalaz.effect.IO
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.equal._
 
@@ -20,8 +20,10 @@ import scalaz.syntax.equal._
 }
 
 object Event {
-  def next[K, S: Sequence, E](key: K, seq: Option[S], op: E): Event[K, S, E] =
-    Event(EventId(key, seq.map { Sequence[S].next }.getOrElse { Sequence[S].first }), DateTime.now, op)
+  def next[KK, S: Sequence, E](key: KK, seq: Option[S], op: E): IO[Event[KK, S, E]] =
+    IO { DateTime.now }.map { now =>
+      Event(EventId(key, seq.map { Sequence[S].next }.getOrElse { Sequence[S].first }), now, op)
+    }
 
   def at[K, S, E](e: Event[K, S, E]): (S, DateTime) =
     (e.id.seq, e.time)

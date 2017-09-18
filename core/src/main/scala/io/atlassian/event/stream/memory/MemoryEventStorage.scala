@@ -3,18 +3,28 @@ package io.atlassian.event.stream.memory
 import io.atlassian.event.Sequence
 import io.atlassian.event.stream.{ Event, EventStorage, EventStreamError }
 
-import scalaz.{ \/, OptionT }
+import scala.collection.concurrent.TrieMap
+import scalaz.{ OptionT, Traverse, \/ }
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.syntax.either._
 import scalaz.syntax.order._
+import scalaz.syntax.traverse._
 
 /**
  * Basic implementation that stores events in an in-memory map.
  */
 object MemoryEventStorage {
-  def apply[KK, S: Sequence, E] = Task.delay {
-    val map = collection.concurrent.TrieMap[KK, List[Event[KK, S, E]]]()
+  type Stream[KK, S, E] = List[Event[KK, S, E]]
+  type Storage[KK, S, E] = TrieMap[KK, Stream[KK, S, E]]
+
+  /**
+   * Build an in-memory store implementation.
+   *
+   * @param map The state of the stream. It will use a blank state if left empty.
+   * @return An in-memory EventStorage
+   */
+  def apply[KK, S: Sequence, E](map: Storage[KK, S, E]) = Task.delay {
 
     new EventStorage[Task, KK, S, E] {
       override def get(key: KK, fromOption: Option[S]): Process[Task, Event[KK, S, E]] = {
@@ -47,4 +57,6 @@ object MemoryEventStorage {
         })
     }
   }
+
+  def empty[KK, S: Sequence, E] = apply(TrieMap[KK, List[Event[KK, S, E]]]())
 }

@@ -112,13 +112,13 @@ object UserAccountExample {
   object DataAccess {
     def apply[F[_]: Monad: LiftIO](eventStore: EventStorage[F, CompanyId, Long, UserAccountEvent]): DataAccess[F] =
       new DataAccess[F] {
-        lazy val saveAPI = SaveAPI[F, CompanyId, Long, UserAccountEvent](eventStore)
+        lazy val saveAPI = SaveAPI[F, CompanyId, Long, UserAccountEvent](SaveAPIConfig.default, eventStore)
         def saveUser(u: User): F[SaveResult[Long]] = {
           val event = InsertUser(u.id.userId, u.name, u.username)
           val operation = Operation[Long, UserAccountEvent] { _ =>
             Operation.Result.success(event)
           }
-          saveAPI.save(SaveAPIConfig.default)(u.id.companyId, operation)
+          saveAPI.save(u.id.companyId, operation)
         }
       }
   }
@@ -128,7 +128,7 @@ object UserAccountExample {
     val saveAndGetUser: Task[Option[User]] =
       for {
         // 1. Instantiate a stream with an EventStorage
-        eventStore <- MemoryEventStorage[CompanyId, Long, UserAccountEvent]
+        eventStore <- MemoryEventStorage.empty[CompanyId, Long, UserAccountEvent]
 
         // 2. Create QueryAPIs defined for stream
         // Just use some in-memory snapshot storage for this example

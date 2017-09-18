@@ -6,5 +6,5 @@ pipelines:
         caches:
           - sbt
         script:
-          - sbt +test:compile
-          - sbt +core/test
+          - sbt test:compile
+          - sbt core/test

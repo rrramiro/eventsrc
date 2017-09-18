@@ -36,8 +36,8 @@ abstract class DirectoryEventStreamSpec extends ScalaCheckSpec {
         val saveApi = DirectoryEventStream.allUsersSaveAPI(eventStore)
 
         (for {
-          _ <- saveApi.save(SaveAPIConfig.default)(k, ops.addUser(u1))
-          _ <- saveApi.save(SaveAPIConfig.default)(k, ops.addUser(u2))
+          _ <- saveApi.save(k, ops.addUser(u1))
+          _ <- saveApi.save(k, ops.addUser(u2))
           allUsers <- api.get(k, QueryConsistency.LatestEvent)
         } yield allUsers) must returnValue(beSome(containTheSameElementsAs(List(u2, u1))))
       }

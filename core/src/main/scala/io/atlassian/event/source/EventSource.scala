@@ -4,6 +4,7 @@ package source
 import org.joda.time.DateTime
 
 import scalaz.{ -\/, Catchable, Monad, NonEmptyList, \/, \/- }
+import scalaz.effect.{ LiftIO, IO }
 import scalaz.stream.{ Process, process1 }
 import scalaz.syntax.either._
 import scalaz.syntax.monad._
@@ -92,9 +93,10 @@ trait EventSource[K, V, S] {
   case class Event(id: EventId, time: DateTime, operation: Transform[V])
 
   object Event {
-    def next(key: K, snapshot: Snapshot, op: Transform[V]): Event =
-      // TODO: SIDE EFFECT!!!
-      Event(snapshot.id.map { EventId.next }.getOrElse { EventId.first(key) }, DateTime.now, op)
+    def next(key: K, snapshot: Snapshot, op: Transform[V]): IO[Event] =
+      IO { DateTime.now }.map { now =>
+        Event(snapshot.id.map { EventId.next }.getOrElse { EventId.first(key) }, now, op)
+      }
   }
 
   /**
@@ -190,6 +192,7 @@ trait EventSource[K, V, S] {
    */
   trait API[F[_]] {
     protected implicit def M: Monad[F]
+    protected implicit def L: LiftIO[F]
     protected implicit def C: Catchable[F]
 
     /**
@@ -243,7 +246,7 @@ trait EventSource[K, V, S] {
       for {
         old <- extractSnapshot(store.get(key))
         op = operation.run(old.value)
-        result <- op.fold(Error.noop.left[Event].point[F], Error.reject(_).left[Event].point[F], v => store.put(Event.next(key, old, v)))
+        result <- op.fold(Error.noop.left[Event].point[F], Error.reject(_).left[Event].point[F], v => L.liftIO(Event.next(key, old, v)).flatMap(store.put))
         transform <- result match {
           case -\/(Error.DuplicateEvent) =>
             save(key, operation)

@@ -97,7 +97,9 @@ To run integration tests, you will need to:
 
 To release and publish, use the standard `sbt`-ism:
 
-    sbt publish             # To publish a snapshot to maven private snapshot repo
-    sbt 'release cross'     # To tag a release and publish to maven private release repo
+    sbt publish       # To publish a snapshot to maven private snapshot repo
+    sbt 'release'     # To tag a release and publish to maven private release repo
     
 Obviously be sure the run the integration before releasing.
+
+There is also an internal build for running releases: [OSSC-EVENTSRC](https://engservices-bamboo.internal.atlassian.com/browse/OSSC-EVENTSRC).
