@@ -51,7 +51,7 @@ object SaveAPI {
     override def batch(key: K, initialOps: NonEmptyList[Operation[S, E]])(implicit MF: Monad[F], LIF: LiftIO[F], SS: Sequence[S]): F[SaveResult[S]] = {
       def go(ops: Option[PartialResult], retryCount: Int): F[PartialResult] =
         latestSeq(key).flatMap { latest =>
-          storeOperations(store, toStreamKey(key), latest.getOrElse(Sequence[S].first), ops.flatMap(unprocessedOps).getOrElse(initialOps), retryCount)
+          storeOperations(store, toStreamKey(key), latest, ops.flatMap(unprocessedOps).getOrElse(initialOps), retryCount)
         }
 
       def latestSeq(key: K)(implicit F: Functor[F]): F[Option[S]] =
@@ -63,7 +63,7 @@ object SaveAPI {
       def unprocessedOps(p: PartialResult): Option[NonEmptyList[Operation[S, E]]] =
         p.fold(a => Some(a._2), _ => None)
 
-      def storeOperations(store: EventStorage[F, IK, S, E], key: IK, s: S, ops: NonEmptyList[Operation[S, E]], retryCount: Int): F[PartialResult] = {
+      def storeOperations(store: EventStorage[F, IK, S, E], key: IK, s: Option[S], ops: NonEmptyList[Operation[S, E]], retryCount: Int): F[PartialResult] = {
         def handleOperationResult[A](a: Operation.Result[A]): EitherT[F, UnprocessedResult, A] =
           EitherT(a.toDisjunction.point[F]).leftMap(a => (SaveResult.reject[S](a, retryCount), ops))
 

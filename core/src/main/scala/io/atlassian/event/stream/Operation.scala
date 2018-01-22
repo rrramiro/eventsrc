@@ -11,8 +11,8 @@ import scalaz.std.option._
  * to an aggregate type.
  * @param apply Function from a sequence to an operation that should occur (i.e. should we save the event or reject it)
  */
-case class Operation[S, A](run: S => Operation.Result[A]) {
-  def apply(op: S): Operation.Result[A] = run(op)
+case class Operation[S, A](run: Option[S] => Operation.Result[A]) {
+  def apply(op: Option[S]): Operation.Result[A] = run(op)
 }
 
 object Operation {
@@ -21,25 +21,25 @@ object Operation {
 
   def ifSeq[S: Equal, A](seq: S, a: A): Operation[S, A] =
     Operation { oseq =>
-      if (oseq === seq) Result.success(a)
+      if (oseq.element(seq)) Result.success(a)
       else Result.reject(Reason(s"Mismatched event stream sequence number: $oseq does not match expected $seq").wrapNel)
     }
 
-  def enumerate[KK, S: Sequence, E](key: KK, latest: S, ops: NonEmptyList[Operation[S, E]]): IO[Operation.Result[NonEmptyList[Event[KK, S, E]]]] = {
+  def enumerate[KK, S: Sequence, E](key: KK, latest: Option[S], ops: NonEmptyList[Operation[S, E]]): IO[Operation.Result[NonEmptyList[Event[KK, S, E]]]] = {
     type Error = NonEmptyList[Reason]
     type Ev = Event[KK, S, E]
     type Evs = NonEmptyList[Ev]
     type EIO[A] = EitherT[IO, Error, A]
 
-    def event(s: S, e: E): IO[Ev] =
-      Event.next(key, Some(s), e)
+    def event(s: Option[S], e: E): IO[Ev] =
+      Event.next(key, s, e)
 
-    def transform(s: S)(op: Operation[S, E]): EIO[Ev] =
+    def transform(s: Option[S])(op: Operation[S, E]): EIO[Ev] =
       EitherT(op(s).toDisjunction.traverse(e => event(s, e)))
 
     foldMapLeft1M[NonEmptyList, EIO, Operation[S, E], Evs](ops)(transform(latest)(_).map(NonEmptyList(_))) { (nel, op) =>
       val s = nel.head.id.seq
-      transform(s)(op).map(_ <:: nel)
+      transform(Some(s))(op).map(_ <:: nel)
     }.map(_.reverse).run.map(Result.fromDisjunction)
   }
 
