@@ -1,7 +1,6 @@
-import sbt._, Keys._
-import sbtrelease.ReleasePlugin._
-import com.typesafe.sbt.SbtScalariform._
-import wartremover._
+import sbt._
+import Keys._
+import wartremover.WartRemover.autoImport._
 
 object Settings {
   val scalacFlags =  Seq(
@@ -27,16 +26,16 @@ object Settings {
 
   lazy val standardSettings =
     Defaults.coreDefaultSettings ++
-    releaseSettings ++ // sbt-release
+    //releaseSettings ++ // sbt-release
     wartRemoval ++
-    scalariformSettings ++
+    //scalariformSettings ++
     scalariformPrefs ++
     Seq[Def.Setting[_]] (
       organization := "io.atlassian"
     , pomIncludeRepository := { (repo: MavenRepository) => false } // no repositories in the pom
-    , scalaVersion := "2.11.11"
+    , scalaVersion := "2.11.12"
     , autoScalaLibrary := false
-    , ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
+    //, ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
     , scalacOptions ++= scalacFlags
     , javacOptions ++= Seq("-encoding", "UTF-8")
     , resolvers ++= Seq(
@@ -58,6 +57,7 @@ object Settings {
     )
 
   lazy val scalariformPrefs = {
+    import com.typesafe.sbt.SbtScalariform.ScalariformKeys
     import scalariform.formatter.preferences._
 
     Seq[Def.Setting[_]](
@@ -67,7 +67,7 @@ object Settings {
         .setPreference(AlignSingleLineCaseStatements,     true)
         .setPreference(CompactControlReadability,         true)
         .setPreference(CompactStringConcatenation,        true)
-        .setPreference(DoubleIndentClassDeclaration,      true)
+        .setPreference(DoubleIndentConstructorArguments,  true)
         .setPreference(PreserveSpaceBeforeArguments,      true)
         .setPreference(RewriteArrowSymbols,               false)
         .setPreference(SpaceInsideParentheses,            false)
@@ -76,18 +76,30 @@ object Settings {
   }
 
   lazy val wartRemoval =
-    wartremoverSettings ++ Seq(
+    Seq(
       wartremoverErrors in (Compile, compile) ++=
         Warts.allBut(
           Wart.Any
           , Wart.DefaultArguments
-          , Wart.NoNeedForMonad
+          //, Wart.NoNeedForMonad
           , Wart.NonUnitStatements
           , Wart.Nothing
           , Wart.Throw
           , Wart.Product
           , Wart.Serializable
           , Wart.FinalCaseClass
+          , Wart.Overloading
+          , Wart.Recursion
+          , Wart.Equals
+          , Wart.LeakingSealed
+          , Wart.PublicInference
+          , Wart.ExplicitImplicitTypes
+          , Wart.Option2Iterable
+          , Wart.OptionPartial
+          , Wart.TraversableOps
+          , Wart.PlatformDefault
+          , Wart.ImplicitParameter
+          , Wart.ListUnapply
         )
       , wartremoverExcluded ++= Seq()
     )

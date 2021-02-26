@@ -1,5 +1,5 @@
-addSbtPlugin("com.github.gseitz" % "sbt-release" % "0.8.5")
+addSbtPlugin("com.github.sbt" % "sbt-release" % "1.0.15")
 
-addSbtPlugin("org.scalariform" % "sbt-scalariform" % "1.6.0")
+addSbtPlugin("org.scalariform" % "sbt-scalariform" % "1.8.3")
 
-addSbtPlugin("org.brianmckenna" % "sbt-wartremover" % "0.13")
+addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.4.13")

@@ -25,16 +25,14 @@ import scalaz.syntax.all._
 class DynamoEventStorage[F[_], KK, S, E](
     tableDef: TableDefinition[KK, E, KK, S],
     runAction: DynamoDBAction ~> F,
-    queryConsistency: ReadConsistency
-)(
+    queryConsistency: ReadConsistency)(
     implicit
     M: Monad[F],
     EKK: Encoder[KK],
     DKK: Decoder[KK],
     ES: Encoder[S],
     DS: Decoder[S],
-    C: Catchable[F]
-) extends EventStorage[F, KK, S, E] {
+    C: Catchable[F]) extends EventStorage[F, KK, S, E] {
 
   lazy val columns = EventSourceColumns(tableDef.key, tableDef.hash, tableDef.range, tableDef.value)
 

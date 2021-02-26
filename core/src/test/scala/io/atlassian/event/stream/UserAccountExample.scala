@@ -25,7 +25,7 @@ object UserAccountExample {
 
   sealed trait UserAccountEvent
   case class InsertUser(id: UserId, name: String,
-    username: String) extends UserAccountEvent
+      username: String) extends UserAccountEvent
 
   case class DeleteUser(id: UserId) extends UserAccountEvent
 
@@ -44,8 +44,7 @@ object UserAccountExample {
 
   def groupMembersByIdQuery(
     eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent],
-    snapshotStore: SnapshotStorage[Task, CompanyGroupId, Long, List[UserId]]
-  ) =
+    snapshotStore: SnapshotStorage[Task, CompanyGroupId, Long, List[UserId]]) =
     QueryAPI[Task, CompanyId, UserAccountEvent, CompanyGroupId, Long, List[UserId]](
       _.companyId,
       eventStore,
@@ -60,13 +59,11 @@ object UserAccountExample {
               val currentList = s.value.getOrElse(List())
               currentList.filterNot { _ == userId }.some
           }
-        }
-    )
+        })
 
   def userByIdQuery(
     eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent],
-    snapshotStore: SnapshotStorage[Task, CompanyUserId, Long, User]
-  ) =
+    snapshotStore: SnapshotStorage[Task, CompanyUserId, Long, User]) =
     QueryAPI[Task, CompanyId, UserAccountEvent, CompanyUserId, Long, User](
       _.companyId,
       eventStore,
@@ -79,13 +76,11 @@ object UserAccountExample {
             case DeleteUser(id) if k.userId == id =>
               none[User]
           }
-        }
-    )
+        })
 
   def userByNameQuery(
     eventStore: EventStorage[Task, CompanyId, Long, UserAccountEvent],
-    snapshotStore: SnapshotStorage[Task, CompanyUsername, Long, User]
-  ) =
+    snapshotStore: SnapshotStorage[Task, CompanyUsername, Long, User]) =
     QueryAPI[Task, CompanyId, UserAccountEvent, CompanyUsername, Long, User](
       _.companyId,
       eventStore,
@@ -101,8 +96,7 @@ object UserAccountExample {
                 case None    => none[User]
               }
           }
-        }
-    )
+        })
 
   // Step 3. Define SaveAPIs and a 'data layer' to save events corresponding to entities with constraints
   trait DataAccess[F[_]] {

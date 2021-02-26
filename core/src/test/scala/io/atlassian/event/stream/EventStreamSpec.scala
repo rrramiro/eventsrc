@@ -28,8 +28,7 @@ class EventStreamSpec extends SpecificationWithJUnit with ScalaCheck {
     saveApi.save(k, Operation.insert(DirectoryEvent.addUser(u1))).unsafePerformSync.fold(
       { _ => failure }, // Fail if we somehow succeeded
       { _ => failure },
-      { success }
-    )
+      { success })
   }.set(minTestsOk = 1)
 }
 

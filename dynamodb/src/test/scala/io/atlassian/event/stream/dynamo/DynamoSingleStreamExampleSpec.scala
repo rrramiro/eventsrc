@@ -62,11 +62,9 @@ object DynamoClientEventStream {
     new DynamoEventStorage(
       schema,
       runner,
-      ReadConsistency.Eventual
-    ).mapKS(
+      ReadConsistency.Eventual).mapKS(
       ColumnSingleStreamKey.iso.from,
       ColumnSingleStreamKey.iso.to,
       ColumnTwoPartSequence.iso.from,
-      ColumnTwoPartSequence.iso.to
-    )
+      ColumnTwoPartSequence.iso.to)
 }

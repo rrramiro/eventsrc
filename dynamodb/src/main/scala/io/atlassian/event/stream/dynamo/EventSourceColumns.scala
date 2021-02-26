@@ -8,8 +8,7 @@ case class EventSourceColumns[KK, S, E](
     key: Column[KK],
     hash: NamedColumn[KK],
     range: NamedColumn[S],
-    value: Column[E]
-) {
+    value: Column[E]) {
   type EID = EventId[KK, S]
   type EV = Event[KK, S, E]
 

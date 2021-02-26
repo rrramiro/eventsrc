@@ -48,12 +48,10 @@ object DirectoryEventStream {
             Snapshot.zero[TwoPartSequence[Long], UserId],
             (m, id, t) =>
               m.get(key._2).fold(
-                Snapshot.deleted[TwoPartSequence[Long], UserId](id, t)
-              ) { uid =>
+                Snapshot.deleted[TwoPartSequence[Long], UserId](id, t)) { uid =>
                   Snapshot.value(uid)(id, t)
                 },
-            (id, t) => Snapshot.deleted(id, t)
-          ) // This should not happen
+            (id, t) => Snapshot.deleted(id, t)) // This should not happen
       }
 
     def put(key: DirectoryUsername, view: Snapshot[TwoPartSequence[Long], UserId], mode: SnapshotStoreMode): Task[SnapshotStorage.Error \/ Snapshot[TwoPartSequence[Long], UserId]] =
@@ -93,8 +91,7 @@ object DirectoryEventStream {
       _._1,
       eventStore,
       shardedUsernameSnapshotStore,
-      partialShardedQuery
-    )
+      partialShardedQuery)
 
   def partialAllQuery[E, S] =
     (key: DirectoryId) => (v: Snapshot[S, List[User]], e: Event[DirectoryId, S, E]) => e.process(v) { ov =>
@@ -106,18 +103,15 @@ object DirectoryEventStream {
 
   def allUsersQueryAPI[E, S](
     eventStore: EventStorage[Task, DirectoryId, S, E],
-    snapshotStore: SnapshotStorage[Task, DirectoryId, S, List[User]]
-  )(implicit S: Sequence[S]): QueryAPI[Task, DirectoryId, S, E, List[User]] =
+    snapshotStore: SnapshotStorage[Task, DirectoryId, S, List[User]])(implicit S: Sequence[S]): QueryAPI[Task, DirectoryId, S, E, List[User]] =
     QueryAPI[Task, DirectoryId, E, DirectoryId, S, List[User]](
       identity,
       eventStore,
       snapshotStore,
-      partialAllQuery
-    )
+      partialAllQuery)
 
   def allUsersQueryAPIWithNoSnapshots[E, S](
-    eventStore: EventStorage[Task, DirectoryId, S, E]
-  )(implicit S: Sequence[S]): QueryAPI[Task, DirectoryId, S, E, List[User]] =
+    eventStore: EventStorage[Task, DirectoryId, S, E])(implicit S: Sequence[S]): QueryAPI[Task, DirectoryId, S, E, List[User]] =
     allUsersQueryAPI(eventStore, SnapshotStorage.none)
 
   def allUsersSaveAPI[K, S: Sequence, E](eventStore: EventStorage[Task, K, S, E]): SaveAPI[Task, K, S, E] =
@@ -137,6 +131,5 @@ object User {
       for {
         uid <- Gen.uuid
         name <- arbitrary[Username]
-      } yield User(uid.toString, name)
-    )
+      } yield User(uid.toString, name))
 }

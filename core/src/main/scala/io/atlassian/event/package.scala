@@ -60,14 +60,12 @@ package object event {
             firstError.fold(run(a)) { e =>
               (e.some, (e, a).left[B]).point[G]
             }
-          }
-        )
+          })
       }
 
     mapF[S, G, F[(E, A)], F[B]](
       eitherTSeparate1(eitherts),
-      _.eval(None)
-    ).leftMap { as =>
+      _.eval(None)).leftMap { as =>
         (head1(as)._1, as.map(_._2))
       }
   }

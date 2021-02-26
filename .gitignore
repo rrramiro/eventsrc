@@ -1,2 +1,7 @@
 target
-*/target
+.bsp
+.history
+.metals
+.vscode
+.idea
+metals.sbt

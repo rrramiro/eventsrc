@@ -31,8 +31,7 @@ sealed trait Snapshot[S, A] {
     fold[Snapshot[S, B]](
       zero,
       { case (a, s, d) => Value(f(a), s, d) },
-      { case (s, d) => deleted[S, B](s, d) }
-    )
+      { case (s, d) => deleted[S, B](s, d) })
 }
 
 object Snapshot {
@@ -72,7 +71,6 @@ object Snapshot {
       old.fold(
         deleted[S, A],
         { case (v, _, _) => value[S, A](v) },
-        { case (_, _) => deleted[S, A] }
-      )(seq, time)
+        { case (_, _) => deleted[S, A] })(seq, time)
 }
 

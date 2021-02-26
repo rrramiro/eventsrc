@@ -12,8 +12,7 @@ case class SaveAPIConfig[F[_]](retry: RetryStrategy[F])
 object SaveAPIConfig {
   def default[F[_]: Monad: LiftIO] =
     SaveAPIConfig(RetryStrategy.retryIntervals(
-      RetryInterval.fullJitter(20, 5.millis, 2.0), Delays.sleep
-    ))
+      RetryInterval.fullJitter(20, 5.millis, 2.0), Delays.sleep))
 }
 
 sealed trait SaveAPI[F[_], K, S, E] { self =>
@@ -39,8 +38,7 @@ object SaveAPI {
   private[SaveAPI] class Impl[F[_], K, S, E, IK](
       config: SaveAPIConfig[F],
       toStreamKey: K => IK,
-      store: EventStorage[F, IK, S, E]
-  ) extends SaveAPI[F, K, S, E] {
+      store: EventStorage[F, IK, S, E]) extends SaveAPI[F, K, S, E] {
 
     def contramap[KK](f: KK => K): SaveAPI[F, KK, S, E] =
       new Impl[F, KK, S, E, IK](config, f andThen toStreamKey, store)
@@ -78,8 +76,7 @@ object SaveAPI {
               case (_, event) =>
                 EitherT(store.put(event)).bimap(
                   SaveResult.fromEventStreamError(retryCount),
-                  e => SaveResult.success(e.id.seq, retryCount)
-                )
+                  e => SaveResult.success(e.id.seq, retryCount))
             }).bimap(toUnprocessedResult, _.last)
           } yield result
 

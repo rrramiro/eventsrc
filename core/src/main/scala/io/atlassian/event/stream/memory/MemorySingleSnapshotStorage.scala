@@ -19,8 +19,7 @@ object MemorySingleSnapshotStorage {
           sequence.fold(
             { _ => Snapshot.zero },
             Snapshot.zero,
-            map.getOrElse(key, Snapshot.zero)
-          )
+            map.getOrElse(key, Snapshot.zero))
         }
 
       override def put(snapshotKey: K, snapshot: Snapshot[S, V], mode: SnapshotStoreMode): Task[SnapshotStorage.Error \/ Snapshot[S, V]] =

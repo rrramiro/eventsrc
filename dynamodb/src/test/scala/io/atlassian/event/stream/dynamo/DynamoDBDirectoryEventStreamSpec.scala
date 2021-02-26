@@ -74,11 +74,9 @@ object DynamoDirectoryEventStream {
     new DynamoEventStorage[Task, ColumnDirectoryId, ColumnTwoPartSequence, DirectoryEvent](
       schema,
       runner,
-      ReadConsistency.Eventual
-    ).mapKS(
+      ReadConsistency.Eventual).mapKS(
       ColumnDirectoryId.iso.from,
       ColumnDirectoryId.iso.to,
       ColumnTwoPartSequence.iso.from,
-      ColumnTwoPartSequence.iso.to
-    )
+      ColumnTwoPartSequence.iso.to)
 }

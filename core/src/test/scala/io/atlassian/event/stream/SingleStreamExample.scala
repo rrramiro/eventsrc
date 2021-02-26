@@ -80,8 +80,7 @@ object SingleStreamExample {
 
   def clientEventStream[S: Sequence](
     eventStore: EventStorage[Task, SingleStreamKey, S, ClientEvent],
-    snapshotStore: SnapshotStorage[Task, Client.Id, S, Client.Data]
-  ): QueryAPI[Task, Client.Id, S, ClientEvent, Client.Data] =
+    snapshotStore: SnapshotStorage[Task, Client.Id, S, Client.Data]): QueryAPI[Task, Client.Id, S, ClientEvent, Client.Data] =
     QueryAPI[Task, SingleStreamKey, ClientEvent, Client.Id, S, Client.Data](
       SingleStreamKey.toVal,
       eventStore,
@@ -93,6 +92,5 @@ object SingleStreamExample {
           case Delete(k) if key == k =>
             none
         }
-      }
-    )
+      })
 }

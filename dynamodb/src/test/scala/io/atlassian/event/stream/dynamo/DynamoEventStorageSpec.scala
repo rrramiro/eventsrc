@@ -159,8 +159,7 @@ class DynamoEventStorageSpec(val arguments: Arguments) extends ScalaCheckSpec wi
       DBEventStorage.put(event).unsafePerformSync
       DynamoDB.get[DBEventStorage.EID, DBEventStorage.EV](eventId)(
         DynamoMappings.tableName,
-        DBEventStorage.columns.eventId, DBEventStorage.columns.event
-      ) must returnValue(event.some)
+        DBEventStorage.columns.eventId, DBEventStorage.columns.event) must returnValue(event.some)
     }
 
   def eventReturnsErrorForDuplicateEvent =

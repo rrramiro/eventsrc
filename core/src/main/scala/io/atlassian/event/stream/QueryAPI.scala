@@ -122,8 +122,7 @@ object QueryAPI {
     toStreamKey: K => KK,
     eventStore: EventStorage[F, KK, S, E],
     snapshotStore: SnapshotStorage[F, K, S, V],
-    acc: K => (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]
-  )(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): QueryAPI[F, K, S, E, V] =
+    acc: K => (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V])(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]): QueryAPI[F, K, S, E, V] =
     new Impl(toStreamKey, eventStore, snapshotStore, acc)
 
   implicit def QueryAPIContravariant[F[_], S, E, V]: Contravariant[QueryAPI[F, ?, S, E, V]] =
@@ -142,8 +141,7 @@ object QueryAPI {
       toStreamKey: K => KK,
       eventStore: EventStorage[F, KK, S, E],
       snapshotStore: SnapshotStorage[F, K, S, V],
-      acc: K => (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]
-  )(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]) extends QueryAPI[F, K, S, E, V] {
+      acc: K => (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V])(implicit F: Monad[F], FC: Catchable[F], S: Sequence[S]) extends QueryAPI[F, K, S, E, V] {
 
     override def get(key: K, consistency: QueryConsistency): F[Option[V]] =
       getSnapshot(key, consistency).map { _.value }
@@ -154,8 +152,7 @@ object QueryAPI {
         for {
           latestSnapshot <- generateLatestSnapshot(key)
           _ <- persistSnapshot(key, latestSnapshot.latest, latestSnapshot.previousPersisted.some)
-        } yield latestSnapshot.latest
-      )
+        } yield latestSnapshot.latest)
 
     override def generateLatestSnapshot(key: K): F[LatestSnapshotResult[S, V]] =
       for {
@@ -190,8 +187,7 @@ object QueryAPI {
         f andThen toStreamKey,
         eventStore,
         snapshotStore.contramap(f),
-        f andThen acc
-      )
+        f andThen acc)
 
     private def persistSnapshot(key: K, snapshot: Snapshot[S, V], previousSnapshot: Option[Snapshot[S, V]]): F[SnapshotStorage.Error \/ Snapshot[S, V]] =
       if (snapshot.seq != previousSnapshot.map { _.seq })
@@ -216,8 +212,7 @@ object QueryAPI {
     private def snapshotFold(
       start: Snapshot[S, V],
       events: Process[F, Event[KK, S, E]],
-      f: (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]
-    ): F[Snapshot[S, V]] =
+      f: (Snapshot[S, V], Event[KK, S, E]) => Snapshot[S, V]): F[Snapshot[S, V]] =
       events.pipe { process1.fold(start)(f) }.runLastOr(start)
   }
 }

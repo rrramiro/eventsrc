@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import sbt._
-import Keys._
+import sbt._, Keys._
 
-object Publishing extends Plugin {
+object Publishing extends AutoPlugin {
   val artifactory = "https://packages.atlassian.com/"
   lazy val release = Some("releases" at artifactory + "maven/public")
   lazy val snapshots = Some("snapshots" at artifactory + "maven/public-snapshot")
   lazy val local = Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
 
-  override def settings = 
+  override def projectSettings: Seq[Def.Setting[_]] =
     Seq(
-      publishTo <<= publishToPublic
+      publishTo := publishToPublic.value
     , publishMavenStyle := true
     , publishArtifact in Test := false
     , pomExtra :=

@@ -41,9 +41,7 @@ class TopicSpec extends ScalaCheckSpec {
                 now <- Task.delay { DateTime.now }
                 _ <- es.put(Event(eventId, now, x))
               } yield ()
-          } as List.empty
-        ).map(Task.fork(_)(pool))
-      )
+          } as List.empty).map(Task.fork(_)(pool)))
     } yield ys.flatten) must returnValue(xs)
   }
 }

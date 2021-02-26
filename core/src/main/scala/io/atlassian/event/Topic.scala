@@ -17,8 +17,7 @@ trait Topic[F[_]] {
   // WartRemover bug causes problems for @-patterns.
   @SuppressWarnings(Array(
     "org.brianmckenna.wartremover.warts.IsInstanceOf",
-    "org.brianmckenna.wartremover.warts.AsInstanceOf"
-  ))
+    "org.brianmckenna.wartremover.warts.AsInstanceOf"))
   def atEnd[KK, S, E](next: Option[S] => Process[F, Event[KK, S, E]]): Process[F, E] = {
     def go(proc: Process[F, Event[KK, S, E]], s: Option[S]): Process[F, E] =
       proc.step match {

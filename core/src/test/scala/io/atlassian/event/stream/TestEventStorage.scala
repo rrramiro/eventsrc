@@ -26,9 +26,8 @@ object TestEvent {
 }
 
 case class TestEventStorage[KK, S, E](
-  underlyingGet: List[Event[KK, S, E]],
-  run: EventStorage[SafeCatchable, KK, S, E]
-)
+    underlyingGet: List[Event[KK, S, E]],
+    run: EventStorage[SafeCatchable, KK, S, E])
 
 object TestEventStorage {
   val genReason: Gen[Reason] =
@@ -40,8 +39,7 @@ object TestEventStorage {
       for {
         head <- genReason
         tail <- Gen.listOf(genReason)
-      } yield EventStreamError.reject(NonEmptyList(head, tail: _*))
-    )
+      } yield EventStreamError.reject(NonEmptyList(head, tail: _*)))
 
   def genGet[KK: Arbitrary, S: Order: Arbitrary, E: Arbitrary]: Gen[List[Event[KK, S, E]]] =
     for {
@@ -55,18 +53,14 @@ object TestEventStorage {
       1 -> SafeCatchable.failure[EventStreamError \/ Event[KK, S, E]],
       20 -> Gen.frequency[EventStreamError \/ Event[KK, S, E]](
         1 -> genEventStreamError.map(_.left),
-        20 -> TestEvent.genEvent[KK, S, E].map(_.right)
-      ).map(SafeCatchable.success)
-    )
+        20 -> TestEvent.genEvent[KK, S, E].map(_.right)).map(SafeCatchable.success))
 
   def genLatest[KK: Arbitrary, S: Arbitrary, E: Arbitrary]: Gen[OptionT[SafeCatchable, Event[KK, S, E]]] =
     Gen.frequency(
       1 -> OptionT.none[SafeCatchable, Event[KK, S, E]],
       20 -> Gen.frequency[SafeCatchable[Event[KK, S, E]]](
         1 -> SafeCatchable.failure[Event[KK, S, E]],
-        20 -> TestEvent.genEvent[KK, S, E].map(SafeCatchable.success)
-      ).map(_.liftM[OptionT])
-    )
+        20 -> TestEvent.genEvent[KK, S, E].map(SafeCatchable.success)).map(_.liftM[OptionT]))
 
   implicit def arbitraryTestEventStorage[KK: Equal: Arbitrary, S: Order: Arbitrary, E: Arbitrary]: Arbitrary[TestEventStorage[KK, S, E]] =
     Arbitrary(
@@ -85,7 +79,5 @@ object TestEventStorage {
 
           override def latest(key: KK): OptionT[SafeCatchable, Event[KK, S, E]] =
             l
-        }
-      )
-    )
+        }))
 }
